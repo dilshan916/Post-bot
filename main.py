@@ -228,8 +228,32 @@ class RedditDailyBot:
 
         # Append tail phrase for vocal decay hack
         script_with_tail = cadence.prepare_script_with_tail(part["script_text"])
-        audio_path = tts.synthesize(script_with_tail, voice=voice)
-        self.logger.info(f"    TTS audio saved: {audio_path.name}")
+        raw_audio_path = tts.synthesize(script_with_tail, voice=voice)
+        self.logger.info(f"    Raw TTS audio saved: {raw_audio_path.name}")
+
+        # Speed up the raw audio by 1.07x before extracting timestamps
+        speed_audio_path = raw_audio_path.parent / f"speed_{raw_audio_path.name}"
+        self.logger.info("    Applying 1.07x audio speed-up using FFmpeg...")
+        
+        import subprocess
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", str(raw_audio_path),
+            "-filter:a", "atempo=1.07",
+            str(speed_audio_path),
+        ]
+        try:
+            self.logger.debug(f"    Running FFmpeg speed-up command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            audio_path = speed_audio_path
+            self.logger.info(f"    Accelerated audio saved: {audio_path.name}")
+        except Exception as exc:
+            self.logger.error(
+                f"    Failed to speed up audio using FFmpeg: {exc}. "
+                "Falling back to raw audio."
+            )
+            audio_path = raw_audio_path
 
         # ── Step 3: Whisper Timestamps ───────────────────────────────
         self.logger.info("  STEP 3 ►  Extracting word-level timestamps")
