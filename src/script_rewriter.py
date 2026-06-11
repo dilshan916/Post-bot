@@ -267,8 +267,8 @@ class ScriptRewriter:
                         "4. Keep the output punchy, flowy, and optimal for text-to-speech narration. Use natural pauses.\n"
                         "5. Ensure the script has an exceptionally high retention rate, using human-like vocabulary, crisp sentences, and a strong initial hook.\n"
                         "6. Output ONLY the clean script text. Do not include any intro titles, metadata, or side notes.\n"
-                        "7. DO NOT include any introductory filler phrases (such as 'Here's a story from Reddit', 'Listen to this story', or 'Here is a post'). "
-                        "The script MUST start immediately with the high-impact story hook sentence."
+                        "7. DO NOT include any introductory greetings, meta-commentary, transitions, or phrases like 'Here is a story', 'Today we have', or 'An interesting post from Reddit'.\n"
+                        "8. The very first sentence of the output MUST be the actual dramatic opening hook of the story narrated in the first person (e.g., 'My mom is having another affair and it's tearing my family apart.'). Jump straight into the core narrative without any preamble or conversational introduction."
                     )
                     
                     payload = {
