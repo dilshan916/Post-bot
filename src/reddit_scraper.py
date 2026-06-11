@@ -458,20 +458,20 @@ class RedditScraper:
         candidates_str = "\n".join(candidate_texts)
 
         system_prompt = (
-            "You are an expert social media content curator. Review the following list of Reddit posts and select "
-            "the single winner that has the absolute highest 'Virality Potential' for short-form social media videos (TikTok/Reels).\n\n"
-            "Evaluate and compare all candidate stories based on these strict virality factors:\n"
-            "1. High Emotional Trigger: Does the story evoke outrage, deep shock, intense drama, or strong empathy?\n"
-            "2. Debatability: Will the story split viewers into conflicting opinions, causing them to fight, debate, and comment intensely?\n"
-            "3. Strong Opener: Does the story have a hook in the first sentence that will immediately capture the viewer within 3 seconds?\n\n"
-            "Strictly reject any meta posts, announcements, rules, surveys, short FAQs, or generic non-story content.\n\n"
-            "Analyze the pronouns/context in the chosen post to determine if the narrator is MALE or FEMALE.\n\n"
-            "Return your selection in raw JSON format with the following keys:\n"
-            "- 'id': The unique ID of the chosen winning post, or 'NONE' if no good stories exist.\n"
-            "- 'gender': Narrator gender detected ('MALE' or 'FEMALE'). If unclear, default to 'MALE'.\n"
-            "- 'virality_reason': A brief 1-sentence explanation detailing why this specific story won and its virality potential based on the criteria.\n\n"
-            "Example JSON output:\n"
-            "{\"id\": \"1u1pr9q\", \"gender\": \"MALE\", \"virality_reason\": \"High emotional trigger due to wedding drama and high debatability regarding the MIL's actions.\"}"
+            "You are an advanced Social Media Analytics Engine specialized in algorithmic virality for vertical videos (TikTok/Reels/Shorts). Your sole purpose is to analyze a batch of Reddit posts and extract the single post with the absolute highest probability of going viral.\n\n"
+            "Evaluate and compare all candidate stories simultaneously based on these mathematical virality dimensions:\n"
+            "1. High Emotional Trigger (Outrage/Shock): Does the story provoke instant moral outrage, deep betrayal, or shocking disbelief? (Family/relationship drama ranks highest).\n"
+            "2. Cognitive Conflict (Debatability): Is there a massive moral 'grey area'? Viewers must feel intensely compelled to split into factions and fight each other in the comment section.\n"
+            "3. Native 3-Second Hook: Does the source text contain a shocking, high-stakes statement in its first two sentences that can be locked as a visual/audio hook?\n\n"
+            "Strictly filter out: Meta-text, updates, announcements, lists, short FAQs, wholesome content with no conflict, or text under 800 characters.\n\n"
+            "Analyze context/pronouns to extract narrator gender (MALE/FEMALE).\n\n"
+            "Output ONLY a raw, minified JSON object. No markdown wrappers, no backticks, no prose.\n"
+            "Required Keys:\n"
+            "- \"id\": \"The unique Reddit ID string\" (or \"NONE\")\n"
+            "- \"gender\": \"MALE\" or \"FEMALE\" (default to \"MALE\" if ambiguous)\n"
+            "- \"virality_reason\": \"A aggressive 1-sentence analytical breakdown of why this specific narrative will force high comment engagement.\"\n\n"
+            "Example Output:\n"
+            "{\"id\":\"1u1pr9q\",\"gender\":\"FEMALE\",\"virality_reason\":\"High outrage factor due to parental betrayal and extreme debatability regarding financial inheritance.\"}"
         )
 
         max_retries = 3
