@@ -1,0 +1,49 @@
+# ============================================================
+# RedditDaily-Bot — Python Dependencies
+# ============================================================
+
+# Core
+pyyaml>=6.0.1
+requests>=2.31.0
+
+# Reddit API
+praw>=7.7.1
+
+# Gemini API
+google-genai>=0.1.1
+
+
+# edge-tts
+edge-tts>=6.1.12
+
+# Audio Processing
+pydub>=0.25.1
+
+# Whisper (word-level timestamps)
+openai-whisper>=20231117
+whisper-timestamped>=1.14.0
+
+# Vosk (CPU fallback)
+vosk>=0.3.45
+
+# Video Processing
+moviepy==1.0.3
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# yt-dlp for gameplay downloads
+yt-dlp>=2024.1.0
+
+# FFmpeg Python bindings
+ffmpeg-python>=0.2.0
+
+# Screenshot Hook (Reddit card rendering)
+playwright>=1.40.0
+
+# GPU detection (optional, for VRAM check)
+# torch is installed as a dependency of whisper
+
+# Utilities
+tqdm>=4.66.0
+colorama>=0.4.6
+pytest>=7.4.0

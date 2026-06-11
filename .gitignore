@@ -1,0 +1,41 @@
+# RedditDaily-Bot — .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temp & output
+temp/
+output/*.mp4
+output/logs/
+
+# Data (history has sensitive post IDs)
+data/scraped_history.json
+
+# Assets (large binary files)
+assets/gameplay/*
+!assets/gameplay/.gitkeep
+assets/vosk_model/
+
+# Config (contains API keys)
+config.yaml
+
+# OS
+Thumbs.db
+.DS_Store

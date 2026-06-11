@@ -1,0 +1,189 @@
+# ============================================================
+# RedditDaily-Bot — Master Configuration Example
+# ============================================================
+# Copy this file to 'config.yaml' and fill in your credentials.
+# All paths are relative to the project root unless absolute.
+# ============================================================
+
+# ----------------------------------------------------------
+# Reddit API (PRAW) — https://www.reddit.com/prefs/apps
+# ----------------------------------------------------------
+reddit:
+  client_id: "YOUR_CLIENT_ID"
+  client_secret: "YOUR_CLIENT_SECRET"
+  user_agent: "RedditDailyBot/1.0 by YourRedditUsername"
+  # Target subreddits to scrape stories from
+  subreddits:
+    - "TrueOffMyChest"
+    - "AmItheAsshole"
+    - "tifu"
+    - "confessions"
+    - "relationship_advice"
+    - "stories"
+  # Scraping parameters
+  sort: "hot" # hot | top | new | rising
+  time_filter: "day" # hour | day | week | month | year | all (for 'top' sort)
+  post_limit: 25 # Max posts to fetch per subreddit
+  min_upvotes: 10 # Minimum score to consider
+  min_word_count: 10 # Minimum words in the post body
+  max_word_count: 350 # Maximum words (skip novels)
+
+# ----------------------------------------------------------
+# LLM Script Rewriting (Optional — leave blank to use regex fallback)
+# ----------------------------------------------------------
+llm:
+  provider: "gemini"
+  api_key: "YOUR_GEMINI_API_KEY_HERE"
+  api_keys:
+    - "YOUR_GEMINI_API_KEY_1"
+    - "YOUR_GEMINI_API_KEY_2"
+    - "YOUR_GEMINI_API_KEY_3"
+  model: "gemini-2.5-flash"
+  max_tokens: 2048
+
+# ----------------------------------------------------------
+# Groq API (Script Rewriter LLM)
+# ----------------------------------------------------------
+groq:
+  api_key: "YOUR_GROQ_API_KEY_HERE"
+  model: "llama-3.3-70b-versatile"
+
+# ----------------------------------------------------------
+# Edge TTS Engine
+# ----------------------------------------------------------
+tts:
+  voice: "en-US-ChristopherNeural" # Default natural US male voice
+
+# ----------------------------------------------------------
+# Acoustic Cadence Settings
+# ----------------------------------------------------------
+cadence:
+  # Pause durations injected by punctuation
+  comma_pause_sec: 0.15 # Single comma
+  period_pause_sec: 0.45 # Period / sentence break
+  dash_pause_sec: 0.75 # Dash / suspense pause
+
+  # Vocal decay hack
+  tail_phrase: "THE END." # Appended phrase for natural decay
+  room_tone_duration_sec: 1.2 # Replacement silence duration
+  room_tone_amplitude: 0.005 # Low-amplitude noise floor
+
+# ----------------------------------------------------------
+# Whisper / Vosk Timestamps
+# ----------------------------------------------------------
+whisper:
+  # Primary: whisper-timestamped
+  model_size: "medium" # tiny | base | small | medium | large
+  language: "en"
+  min_vram_gb: 5.0 # Minimum free VRAM to use Whisper GPU
+
+  # Fallback: Vosk
+  vosk_model: "vosk-model-small-en-us-0.15"
+  vosk_model_path: "assets/vosk_model"
+
+# ----------------------------------------------------------
+# Subtitle Rendering (Double-Pass)
+# ----------------------------------------------------------
+subtitles:
+  # Font settings
+  font_family: "Arial" # System font or path in assets/fonts/
+  font_size: 95
+  font_bold: true
+  max_words: 1
+
+  # Passive pass (full sentence)
+  passive_color: "#FFFFFF"
+  passive_opacity: 0.40
+  passive_stroke_color: "#000000"
+  passive_stroke_width: 2
+
+  # Active pass (highlighted word)
+  active_color: "#FFE500"
+  active_opacity: 1.0
+  active_stroke_color: "#000000"
+  active_stroke_width: 3
+
+  # Position (fraction of frame height from top)
+  vertical_position: 0.72
+
+  # Max characters per line before wrapping
+  max_chars_per_line: 35
+
+# ----------------------------------------------------------
+# Reddit Screenshot Hook
+# ----------------------------------------------------------
+screenshot:
+  enabled: true
+  theme: "dark" # dark | light
+  display_duration_sec: 3.5 # How long the card is visible
+  fade_duration_sec: 0.8 # Fade-out duration
+  card_width_pct: 0.88 # Card width as fraction of frame width
+
+# ----------------------------------------------------------
+# Smart Splitter
+# ----------------------------------------------------------
+splitter:
+  max_duration_sec: 180 # 3 minutes max per part
+  words_per_minute: 155 # Average TTS speaking rate
+  min_part_duration_sec: 45 # Don't create tiny parts
+  watermark_text: "Part {n} of {total}"
+  watermark_position: "top-right"
+  watermark_font_size: 28
+  watermark_color: "#FFFFFF"
+  watermark_opacity: 0.7
+
+# ----------------------------------------------------------
+# Video Processing & FFmpeg
+# ----------------------------------------------------------
+video:
+  # Output settings
+  output_dir: "output"
+  resolution:
+    width: 1080
+    height: 1920
+  fps: 30
+  codec: "libx264"
+  audio_codec: "aac"
+  crf: 18 # Quality (lower = better, 18 = visually lossless)
+  preset: "medium" # ultrafast | fast | medium | slow | veryslow
+  pixel_format: "yuv420p"
+  bitrate: "5000k" # Video bitrate (e.g. 5000k for high quality Reels)
+  audio_bitrate: "192k" # Audio bitrate (e.g. 192k for high quality stereo audio)
+
+  # Gameplay background sources (yt-dlp URLs or local paths)
+  gameplay_sources:
+    - url: "https://youtu.be/s600FYgI5-s?si=VH1KY-p5GMVejos9"
+      label: "gameplay_video"
+    # Add local files by placing them in assets/gameplay/
+  gameplay_dir: "assets/gameplay"
+
+  # FFmpeg hash destruction filter parameters
+  filters:
+    # Spatial distortion — intermediate upscale then crop
+    scale_width: 1200
+    scale_height: 2130
+    crop_width: 1080
+    crop_height: 1920
+
+    # Chromatic grading
+    hue_shift: 0.5 # Degrees
+    saturation_mult: 1.02 # 2% boost
+    brightness_shift: 0.01 # 1% lift
+
+    # Noise injection
+    noise_strength: 2 # alls value
+    noise_flags: "t" # temporal noise
+
+    # Audio tempo shift
+    audio_tempo: 1.01 # 1% speedup
+
+# ----------------------------------------------------------
+# Pipeline Settings
+# ----------------------------------------------------------
+pipeline:
+  batch_size: 1 # Stories per run (override with --batch N)
+  temp_dir: "temp" # Temp working directory
+  log_dir: "output/logs"
+  log_level: "INFO" # DEBUG | INFO | WARNING | ERROR
+  scraped_history: "data/scraped_history.json"
+  keep_temp_files: false # Set true for debugging
