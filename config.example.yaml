@@ -20,6 +20,11 @@ reddit:
     - "confessions"
     - "relationship_advice"
     - "stories"
+    - "maliciouscompliance"
+    - "entitledpeople"
+    - "pettyrevenge"
+    - "familyissues"
+    - "prorevenge"
   # Scraping parameters
   sort: "hot" # hot | top | new | rising
   time_filter: "day" # hour | day | week | month | year | all (for 'top' sort)
