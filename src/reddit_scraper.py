@@ -9,6 +9,7 @@ and de-duplicates against a persistent JSON ledger so stories are never re-used.
 from __future__ import annotations
 
 import time
+import random
 import html
 import re
 import xml.etree.ElementTree as ET
@@ -162,100 +163,119 @@ class RedditScraper:
         if sort_method == "top":
             params["t"] = time_filter
 
-        try:
-            self.log.debug("GET %s with params %s", url, params)
-            response = requests.get(url, headers=headers, params=params, timeout=15)
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                self.log.debug("GET %s with params %s (attempt %d/%d)", url, params, attempt + 1, max_retries + 1)
+                response = requests.get(url, headers=headers, params=params, timeout=15)
 
-            if response.status_code != 200:
+                if response.status_code == 429:
+                    if attempt < max_retries:
+                        self.log.warning(
+                            "Reddit RSS rate-limited (HTTP 429) for r/%s. "
+                            "Sleeping 30 seconds before retry %d/%d...",
+                            subreddit_name, attempt + 1, max_retries
+                        )
+                        time.sleep(30)
+                        continue
+                    else:
+                        self.log.error(
+                            "Reddit RSS rate-limited (HTTP 429) for r/%s. "
+                            "Failed after %d retries.",
+                            subreddit_name, max_retries
+                        )
+                        return []
+
+                if response.status_code != 200:
+                    self.log.error(
+                        "Failed to fetch r/%s RSS: HTTP %d - %s",
+                        subreddit_name,
+                        response.status_code,
+                        response.text[:200],
+                    )
+                    return []
+
+                root = ET.fromstring(response.content)
+                ns = {'atom': 'http://www.w3.org/2005/Atom'}
+
+                posts = []
+                for entry in root.findall('atom:entry', ns):
+                    # ID
+                    id_node = entry.find('atom:id', ns)
+                    raw_id = id_node.text if id_node is not None else ""
+                    # ID format is t3_postid. Extract postid.
+                    post_id = raw_id.split('_')[1] if '_' in raw_id else raw_id
+
+                    # Title
+                    title_node = entry.find('atom:title', ns)
+                    title = title_node.text if title_node is not None else ""
+
+                    # Content (HTML body)
+                    content_node = entry.find('atom:content', ns)
+                    content_html = content_node.text if content_node is not None else ""
+
+                    # Author
+                    author_node = entry.find('atom:author/atom:name', ns)
+                    author = author_node.text if author_node is not None else "[deleted]"
+                    if author.startswith("/u/"):
+                        author = author[3:]
+
+                    # Link / URL
+                    link_node = entry.find("atom:link[@rel='alternate']", ns)
+                    if link_node is None:
+                        link_node = entry.find("atom:link", ns)
+                    permalink_url = link_node.attrib.get('href', '') if link_node is not None else ""
+
+                    # Created UTC
+                    updated_node = entry.find('atom:updated', ns)
+                    if updated_node is None:
+                        updated_node = entry.find('atom:published', ns)
+
+                    created_utc = 0.0
+                    if updated_node is not None and updated_node.text:
+                        try:
+                            dt = datetime.fromisoformat(updated_node.text)
+                            created_utc = dt.timestamp()
+                        except Exception:
+                            pass
+
+                    # Extract selftext (body) from the HTML content
+                    body = ""
+                    is_self = False
+                    match = re.search(r'<div class="md">(.*?)</div>', content_html, re.DOTALL)
+                    if match:
+                        body_html = match.group(1)
+                        body = re.sub(r'<[^>]+>', '', body_html)
+                        body = html.unescape(body).strip()
+                        is_self = True
+
+                    # Note: RSS does not provide score. Set it to a dummy high score to pass filter thresholds.
+                    min_upvotes = self.reddit_cfg.get("min_upvotes", 500)
+                    score = min_upvotes + 100
+
+                    posts.append({
+                        "id": post_id,
+                        "title": title,
+                        "selftext": body,
+                        "subreddit": subreddit_name,
+                        "score": score,
+                        "permalink": f"/r/{subreddit_name}/comments/{post_id}/",
+                        "url": permalink_url,
+                        "author": author,
+                        "created_utc": created_utc,
+                        "is_self": is_self,
+                    })
+
+                # Enforce limits locally
+                return posts[:limit]
+
+            except Exception as exc:
                 self.log.error(
-                    "Failed to fetch r/%s RSS: HTTP %d - %s",
+                    "Error fetching r/%s RSS: %s",
                     subreddit_name,
-                    response.status_code,
-                    response.text[:200],
+                    exc,
                 )
                 return []
-
-            root = ET.fromstring(response.content)
-            ns = {'atom': 'http://www.w3.org/2005/Atom'}
-
-            posts = []
-            for entry in root.findall('atom:entry', ns):
-                # ID
-                id_node = entry.find('atom:id', ns)
-                raw_id = id_node.text if id_node is not None else ""
-                # ID format is t3_postid. Extract postid.
-                post_id = raw_id.split('_')[1] if '_' in raw_id else raw_id
-
-                # Title
-                title_node = entry.find('atom:title', ns)
-                title = title_node.text if title_node is not None else ""
-
-                # Content (HTML body)
-                content_node = entry.find('atom:content', ns)
-                content_html = content_node.text if content_node is not None else ""
-
-                # Author
-                author_node = entry.find('atom:author/atom:name', ns)
-                author = author_node.text if author_node is not None else "[deleted]"
-                if author.startswith("/u/"):
-                    author = author[3:]
-
-                # Link / URL
-                link_node = entry.find("atom:link[@rel='alternate']", ns)
-                if link_node is None:
-                    link_node = entry.find("atom:link", ns)
-                permalink_url = link_node.attrib.get('href', '') if link_node is not None else ""
-
-                # Created UTC
-                updated_node = entry.find('atom:updated', ns)
-                if updated_node is None:
-                    updated_node = entry.find('atom:published', ns)
-
-                created_utc = 0.0
-                if updated_node is not None and updated_node.text:
-                    try:
-                        dt = datetime.fromisoformat(updated_node.text)
-                        created_utc = dt.timestamp()
-                    except Exception:
-                        pass
-
-                # Extract selftext (body) from the HTML content
-                body = ""
-                is_self = False
-                match = re.search(r'<div class="md">(.*?)</div>', content_html, re.DOTALL)
-                if match:
-                    body_html = match.group(1)
-                    body = re.sub(r'<[^>]+>', '', body_html)
-                    body = html.unescape(body).strip()
-                    is_self = True
-
-                # Note: RSS does not provide score. Set it to a dummy high score to pass filter thresholds.
-                min_upvotes = self.reddit_cfg.get("min_upvotes", 500)
-                score = min_upvotes + 100
-
-                posts.append({
-                    "id": post_id,
-                    "title": title,
-                    "selftext": body,
-                    "subreddit": subreddit_name,
-                    "score": score,
-                    "permalink": f"/r/{subreddit_name}/comments/{post_id}/",
-                    "url": permalink_url,
-                    "author": author,
-                    "created_utc": created_utc,
-                    "is_self": is_self,
-                })
-
-            # Enforce limits locally
-            return posts[:limit]
-
-        except Exception as exc:
-            self.log.error(
-                "Error fetching r/%s RSS: %s",
-                subreddit_name,
-                exc,
-            )
-            return []
 
     @staticmethod
     def _submission_to_dict(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -394,8 +414,10 @@ class RedditScraper:
                 len(submissions),
             )
 
-            # Small courtesy delay between subreddit requests to prevent HTTP 429 rate limits
-            time.sleep(3.0)
+            # Randomized cooldown delay to prevent HTTP 429 rate limits
+            cooldown = random.uniform(5.0, 8.0)
+            self.log.debug("Sleeping for %.2f seconds before next subreddit...", cooldown)
+            time.sleep(cooldown)
 
         # Sort by score descending so best stories come first
         all_posts.sort(key=lambda p: p["score"], reverse=True)
