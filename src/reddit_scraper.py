@@ -394,8 +394,8 @@ class RedditScraper:
                 len(submissions),
             )
 
-            # Small courtesy delay between subreddit requests
-            time.sleep(0.5)
+            # Small courtesy delay between subreddit requests to prevent HTTP 429 rate limits
+            time.sleep(3.0)
 
         # Sort by score descending so best stories come first
         all_posts.sort(key=lambda p: p["score"], reverse=True)
