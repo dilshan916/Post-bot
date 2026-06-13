@@ -6,9 +6,6 @@
 pyyaml>=6.0.1
 requests>=2.31.0
 
-# Reddit API
-praw>=7.7.1
-
 # Gemini API
 google-genai>=0.1.1
 

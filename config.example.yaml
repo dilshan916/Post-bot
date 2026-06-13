@@ -6,7 +6,7 @@
 # ============================================================
 
 # ----------------------------------------------------------
-# Reddit API (PRAW) — https://www.reddit.com/prefs/apps
+# Reddit RSS Scraper Config (Keyless public feeds)
 # ----------------------------------------------------------
 reddit:
   client_id: "YOUR_CLIENT_ID"
