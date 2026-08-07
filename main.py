@@ -1012,11 +1012,15 @@ class RedditDailyBot:
                     print(Fore.GREEN + Style.BRIGHT + f"  Video rendered successfully: {path.name}")
                     print(Fore.GREEN + Style.BRIGHT + "============================================================")
                     
-                    try:
-                        post_choice = input(Fore.GREEN + "Post this video to Facebook Reels? (y: yes/post, n: save only): ").strip().lower()
-                    except (KeyboardInterrupt, EOFError):
-                        post_choice = "n"
-                        print()
+                    fb_enabled = self.config.get("facebook", {}).get("enabled", False)
+                    if not sys.stdin.isatty() or not self.config.get("pipeline", {}).get("approve_scripts", False):
+                        post_choice = 'y' if fb_enabled else 'n'
+                    else:
+                        try:
+                            post_choice = input(Fore.GREEN + "Post this video to Facebook Reels? (y: yes/post, n: save only): ").strip().lower()
+                        except (KeyboardInterrupt, EOFError):
+                            post_choice = "y" if fb_enabled else "n"
+                            print()
                         
                     if post_choice == 'y':
                         self.logger.info(Fore.GREEN + Style.BRIGHT + "  PUBLISHING TO FACEBOOK REELS...")

@@ -386,7 +386,7 @@ riddle:
 # Facebook Page Reels Publishing (Auto-Post Riddle Mode)
 # ----------------------------------------------------------
 facebook:
-  enabled: false
+  enabled: true
   page_id: "YOUR_FACEBOOK_PAGE_ID_HERE"
   page_access_token: "YOUR_PAGE_ACCESS_TOKEN_HERE"
   conversational_page_id: "YOUR_CONVERSATIONAL_FACEBOOK_PAGE_ID_HERE"
