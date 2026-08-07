@@ -763,7 +763,7 @@ class RedditDailyBot:
             f"est. {format_duration(estimate_duration_sec(script))}"
         )
 
-        approve_required = self.config.get("pipeline", {}).get("approve_scripts", True)
+        approve_required = self.config.get("pipeline", {}).get("approve_scripts", False) and sys.stdin.isatty()
         if approve_required:
             feedback_str = None
             while True:
