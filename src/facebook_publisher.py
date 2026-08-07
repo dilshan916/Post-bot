@@ -14,6 +14,12 @@ class FacebookReelsPublisher:
         self.page_id = ""
         self.access_token = ""
 
+        def _clean(val: Any) -> str:
+            s = str(val or "").strip()
+            if s.startswith("YOUR_") or s.endswith("_HERE"):
+                return ""
+            return s
+
         # First check if facebook.pages array exists
         pages = fb_cfg.get("pages", [])
         if pages and isinstance(pages, list):
@@ -25,20 +31,26 @@ class FacebookReelsPublisher:
             elif pipeline_mode == "riddle" and len(pages) >= 3:
                 page_obj = pages[2]
             if page_obj and isinstance(page_obj, dict):
-                self.page_id = str(page_obj.get("page_id", "")).strip()
-                self.access_token = str(page_obj.get("access_token", "")).strip()
+                self.page_id = _clean(page_obj.get("page_id", ""))
+                self.access_token = _clean(page_obj.get("access_token", ""))
 
         # Fallback to direct key mappings if pages array is not defined or missing fields
         if not self.page_id or not self.access_token:
             if pipeline_mode == "conversational":
-                self.page_id = str(fb_cfg.get("conversational_page_id", fb_cfg.get("page_id", ""))).strip()
-                self.access_token = str(fb_cfg.get("conversational_page_access_token", fb_cfg.get("page_access_token", ""))).strip()
+                self.page_id = _clean(fb_cfg.get("conversational_page_id")) or _clean(fb_cfg.get("page_id"))
+                self.access_token = _clean(fb_cfg.get("conversational_page_access_token")) or _clean(fb_cfg.get("page_access_token"))
             elif pipeline_mode == "monologue":
-                self.page_id = str(fb_cfg.get("monologue_page_id", fb_cfg.get("page_id", ""))).strip()
-                self.access_token = str(fb_cfg.get("monologue_page_access_token", fb_cfg.get("page_access_token", ""))).strip()
+                self.page_id = _clean(fb_cfg.get("monologue_page_id")) or _clean(fb_cfg.get("page_id"))
+                self.access_token = _clean(fb_cfg.get("monologue_page_access_token")) or _clean(fb_cfg.get("page_access_token"))
             else:
-                self.page_id = str(fb_cfg.get("page_id", "")).strip()
-                self.access_token = str(fb_cfg.get("page_access_token", "")).strip()
+                self.page_id = _clean(fb_cfg.get("page_id"))
+                self.access_token = _clean(fb_cfg.get("page_access_token"))
+
+        # Fallback to environment variables if still empty
+        if not self.page_id:
+            self.page_id = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
+        if not self.access_token:
+            self.access_token = os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN", "").strip()
 
         # Check for proxy configuration in page_obj or fb_cfg
         proxy_str = ""

@@ -161,8 +161,13 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
             fb_cfg = cfg.setdefault("facebook", {})
             fb_cfg["enabled"] = True
             fb_cfg["page_access_token"] = fb_token
+            fb_cfg["monologue_page_access_token"] = fb_token
+            fb_cfg["conversational_page_access_token"] = fb_token
             if "FACEBOOK_PAGE_ID" in os.environ and os.environ["FACEBOOK_PAGE_ID"].strip():
-                fb_cfg["page_id"] = os.environ["FACEBOOK_PAGE_ID"].strip()
+                page_id_val = os.environ["FACEBOOK_PAGE_ID"].strip()
+                fb_cfg["page_id"] = page_id_val
+                fb_cfg["monologue_page_id"] = page_id_val
+                fb_cfg["conversational_page_id"] = page_id_val
             pages = fb_cfg.get("pages", [])
             if pages and isinstance(pages, list):
                 for p in pages:
