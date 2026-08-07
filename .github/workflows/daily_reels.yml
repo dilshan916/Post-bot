@@ -43,10 +43,10 @@ jobs:
           v_path = 'assets/kokoro/voices.bin'
           if not os.path.exists(m_path):
               print('Downloading Kokoro ONNX model...')
-              urllib.request.urlretrieve('https://github.com/thewhitemamba/kokoro-onnx/releases/download/v0.19/kokoro-v0_19.onnx', m_path)
+              urllib.request.urlretrieve('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx', m_path)
           if not os.path.exists(v_path):
               print('Downloading Kokoro voices bin...')
-              urllib.request.urlretrieve('https://github.com/thewhitemamba/kokoro-onnx/releases/download/v0.19/voices.bin', v_path)
+              urllib.request.urlretrieve('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin', v_path)
           "
 
       - name: Run Bot Auto-Post Pipeline
