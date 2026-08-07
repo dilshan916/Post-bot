@@ -108,3 +108,72 @@ def test_subtitle_text_wrap(video_config):
     assert len(lines) > 1
     for line in lines:
         assert len(line) <= 20
+
+def test_create_speaker_stickers(video_config):
+    from unittest.mock import MagicMock, patch
+    from PIL import Image
+    
+    # Add stickers config settings to video_config
+    video_config["conversational"] = {
+        "stickers_enabled": True,
+        "male_sticker_path": "assets/stickers/male_neutral.png",
+        "female_sticker_path": "assets/stickers/female_neutral.png",
+        "sticker_size": 250,
+        "sticker_y_position": 0.35,
+    }
+    
+    compositor = VideoCompositor(video_config, MagicMock())
+    
+    # 1. Test fallback when paths don't exist
+    with patch("src.video_compositor.resolve_path") as mock_resolve:
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+        mock_resolve.return_value = mock_path
+        
+        clips = compositor._create_speaker_stickers(
+            dialogue_timings=[{"start": 0.0, "end": 2.0, "speaker": "MALE", "text": "Hello"}],
+            frame_size=(1080, 1920)
+        )
+        assert clips == []
+        
+    # 2. Test clip generation when paths exist
+    dummy_img = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
+    
+    with patch("src.video_compositor.resolve_path") as mock_resolve, \
+         patch("PIL.Image.open") as mock_open:
+        
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_resolve.return_value = mock_path
+        mock_open.return_value = dummy_img
+        
+        dialogue_timings = [
+            {"start": 0.0, "end": 2.0, "speaker": "MALE", "emotion": "angry", "text": "I am not angry!"},
+            {"start": 2.2, "end": 5.0, "speaker": "FEMALE", "emotion": "surprised", "text": "What do you mean?"},
+        ]
+        
+        clips = compositor._create_speaker_stickers(
+            dialogue_timings=dialogue_timings,
+            frame_size=(1080, 1920)
+        )
+        
+        assert len(clips) == 2
+        assert clips[0].start == 0.0
+        assert clips[0].duration == 2.0
+        assert clips[1].start == 2.2
+        assert clips[1].duration == 2.8
+
+def test_detect_emotion(video_config):
+    from unittest.mock import MagicMock
+    compositor = VideoCompositor(video_config, MagicMock())
+    
+    assert compositor._detect_emotion("I am so angry and furious!") == "angry"
+    assert compositor._detect_emotion("I am so sorry, I feel so sad.") == "crying"
+    assert compositor._detect_emotion("What? This is insane!") == "surprised"
+    assert compositor._detect_emotion("I am so worried and stressed.") == "stressed"
+    assert compositor._detect_emotion("I love you sweetheart!") == "lovestruck"
+    assert compositor._detect_emotion("This is happy, great fun!") == "happy"
+    assert compositor._detect_emotion("Who are you?") == "thinking"
+    assert compositor._detect_emotion("Hello world.") == "talking"
+
+

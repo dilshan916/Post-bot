@@ -27,6 +27,14 @@ from src.utils import (
     validate_api_key,
 )
 
+_USER_AGENTS: List[str] = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edge/120.0.0.0",
+]
+
 
 class RedditScraper:
     """Scrapes Reddit self-text posts and manages a de-duplication ledger.
@@ -87,6 +95,7 @@ class RedditScraper:
         if not self._api_keys and self._api_key:
             self._api_keys = [self._api_key]
         self._model: str = llm_cfg.get("model", "gemini-2.5-flash")
+        self._session = requests.Session()
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -152,11 +161,6 @@ class RedditScraper:
         if not user_agent or "YourRedditUsername" in user_agent or "YOUR_" in user_agent:
             user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-        headers = {
-            "User-Agent": user_agent,
-            "Accept": "application/atom+xml,application/xml,text/xml",
-        }
-
         # Use public RSS feed to bypass JSON block
         url = f"https://www.reddit.com/r/{subreddit_name}/{sort_method}.rss"
         params: Dict[str, Any] = {}
@@ -165,6 +169,22 @@ class RedditScraper:
 
         max_retries = 3
         for attempt in range(max_retries + 1):
+            ua = random.choice(_USER_AGENTS) if (not user_agent or "YourRedditUsername" in user_agent or "YOUR_" in user_agent) else user_agent
+            headers = {
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Ch-Ua": '"Not A(MeatPage;Bypass;1.0", "Chromium";"121", "Google Chrome";"121"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+            }
             try:
                 self.log.debug("GET %s with params %s (attempt %d/%d)", url, params, attempt + 1, max_retries + 1)
                 response = requests.get(url, headers=headers, params=params, timeout=15)
@@ -316,18 +336,26 @@ class RedditScraper:
         Returns:
             True if the submission passes all filters.
         """
+        pipeline_mode = self.pipeline_cfg.get("pipeline_mode", "monologue")
+
         # Self-text only
-        if not data.get("is_self", False):
+        if pipeline_mode not in ("shower", "riddle") and not data.get("is_self", False):
             return False
 
         body: str = (data.get("selftext", "") or "").strip()
         title: str = (data.get("title", "") or "").strip()
 
-        # Removed / deleted / empty body or title
-        if not body or body.lower() in ("[removed]", "[deleted]", "[ removed by reddit ]"):
-            return False
+        # Removed / deleted / empty title
         if not title or title.lower() in ("[removed]", "[deleted]", "[ removed by reddit ]"):
             return False
+
+        if pipeline_mode not in ("thread", "shower", "riddle"):
+            # Removed / deleted / empty body
+            if not body or body.lower() in ("[removed]", "[deleted]", "[ removed by reddit ]"):
+                return False
+        else:
+            if body.lower() in ("[removed]", "[deleted]", "[ removed by reddit ]"):
+                body = ""
 
         # Reject meta-focused posts containing survey, studies, moderator notes etc.
         combined_text = f"{title} {body}".lower()
@@ -341,11 +369,12 @@ class RedditScraper:
             return False
 
         # Word-count window
-        wc = word_count(body)
-        min_wc: int = self.reddit_cfg.get("min_word_count", 150)
-        max_wc: int = self.reddit_cfg.get("max_word_count", 3000)
-        if wc < min_wc or wc > max_wc:
-            return False
+        if pipeline_mode not in ("thread", "shower", "riddle"):
+            wc = word_count(body)
+            min_wc: int = self.reddit_cfg.get("min_word_count", 150)
+            max_wc: int = self.reddit_cfg.get("max_word_count", 3000)
+            if wc < min_wc or wc > max_wc:
+                return False
 
         # De-duplication
         if self._is_scraped(data.get("id", "")):
@@ -414,10 +443,11 @@ class RedditScraper:
                 len(submissions),
             )
 
-            # Randomized cooldown delay to prevent HTTP 429 rate limits
-            cooldown = random.uniform(5.0, 8.0)
-            self.log.debug("Sleeping for %.2f seconds before next subreddit...", cooldown)
-            time.sleep(cooldown)
+            # Cooldown delay of 45 seconds to prevent HTTP 429 rate limits
+            if sub_name != subreddits[-1]:
+                cooldown = 45.0
+                self.log.info("Sleeping for %.1f seconds before next subreddit...", cooldown)
+                time.sleep(cooldown)
 
         # Sort by score descending so best stories come first
         all_posts.sort(key=lambda p: p["score"], reverse=True)
@@ -429,27 +459,38 @@ class RedditScraper:
         )
 
         # Apply intelligent Gemini filter to select the perfect storytelling post
+        pipeline_mode = self.pipeline_cfg.get("pipeline_mode", "monologue")
         if self._use_llm and validate_api_key(self._api_key, "Gemini") and all_posts:
-            llm_candidates = all_posts[:15]
-            self.log.info("Filtering %d candidate posts via Gemini story selector...", len(llm_candidates))
-            selected_data = self._intelligent_llm_filter(llm_candidates)
-            if selected_data == "FALLBACK_TO_ALL":
-                self.log.warning("Gemini story selector failed. Falling back to default candidate list.")
+            if pipeline_mode in ("shower", "riddle"):
+                self.log.info("Filtering candidate posts via Gemini story selector for shower/riddle mode...")
+                selected_ids = self._intelligent_llm_filter_shower(all_posts[:15])
+                if selected_ids:
+                    selected_posts = [p for p in all_posts if p["id"] in selected_ids]
+                    remaining = [p for p in all_posts if p["id"] not in selected_ids]
+                    return selected_posts + remaining
+            else:
+                llm_candidates = all_posts[:15]
+                self.log.info("Filtering %d candidate posts via Gemini story selector...", len(llm_candidates))
+                selected_data = self._intelligent_llm_filter(llm_candidates)
+                if selected_data == "FALLBACK_TO_ALL":
+                    self.log.warning("Gemini story selector failed. Falling back to default candidate list.")
+                    return all_posts
+                if selected_data:
+                    selected_id = selected_data.get("id")
+                    gender = selected_data.get("gender", "MALE")
+                    virality_reason = selected_data.get("virality_reason", "No reason provided.")
+                    selected_post = next((p for p in all_posts if p["id"] == selected_id), None)
+                    if selected_post:
+                        selected_post["narrator_gender"] = gender
+                        selected_post["virality_reason"] = virality_reason
+                        self.log.info("Gemini selected story: [%s] %s (gender=%s)", selected_id, selected_post["title"], gender)
+                        self.log.info("Virality Reason: %s", virality_reason)
+                        # Return all posts with the Gemini selected post at the front
+                        remaining = [p for p in all_posts if p["id"] != selected_id]
+                        return [selected_post] + remaining
+                # Gemini returned NONE, empty, or unrecognized — fall back to returning all posts
+                self.log.warning("Gemini story selector returned no valid match. Falling back to all candidates.")
                 return all_posts
-            if selected_data:
-                selected_id = selected_data.get("id")
-                gender = selected_data.get("gender", "MALE")
-                virality_reason = selected_data.get("virality_reason", "No reason provided.")
-                selected_post = next((p for p in all_posts if p["id"] == selected_id), None)
-                if selected_post:
-                    selected_post["narrator_gender"] = gender
-                    selected_post["virality_reason"] = virality_reason
-                    self.log.info("Gemini selected story: [%s] %s (gender=%s)", selected_id, selected_post["title"], gender)
-                    self.log.info("Virality Reason: %s", virality_reason)
-                    return [selected_post]
-            # Gemini returned NONE, empty, or unrecognized — fall back to top candidates
-            self.log.warning("Gemini story selector returned no valid match. Falling back to top candidate.")
-            return all_posts[:1]
 
         return all_posts
 
@@ -479,13 +520,29 @@ class RedditScraper:
             )
         candidates_str = "\n".join(candidate_texts)
 
-        system_prompt = (
+        pipeline_mode = self.pipeline_cfg.get("pipeline_mode", "monologue")
+        system_prompt_base = (
             "You are an advanced Social Media Analytics Engine specialized in algorithmic virality for vertical videos (TikTok/Reels/Shorts). Your sole purpose is to analyze a batch of Reddit posts and extract the single post with the absolute highest probability of going viral.\n\n"
             "Evaluate and compare all candidate stories simultaneously based on these mathematical virality dimensions:\n"
             "1. High Emotional Trigger (Outrage/Shock): Does the story provoke instant moral outrage, deep betrayal, or shocking disbelief? (Family/relationship drama ranks highest).\n"
             "2. Cognitive Conflict (Debatability): Is there a massive moral 'grey area'? Viewers must feel intensely compelled to split into factions and fight each other in the comment section.\n"
             "3. Native 3-Second Hook: Does the source text contain a shocking, high-stakes statement in its first two sentences that can be locked as a visual/audio hook?\n\n"
-            "Strictly filter out: Meta-text, updates, announcements, lists, short FAQs, wholesome content with no conflict, or text under 800 characters.\n\n"
+        )
+        if pipeline_mode == "thread":
+            system_prompt_base += (
+                "For thread compilation mode, look for open-ended, highly intriguing questions that invite juicy, funny, or shocking responses (e.g. secrets, relationship dynamics, regrets).\n"
+                "Do NOT filter out short texts or empty post bodies; the question title itself is the hook.\n\n"
+            )
+        elif pipeline_mode in ("shower", "riddle"):
+            system_prompt_base += (
+                "For shower thoughts/riddle compilation mode, look for the most mind-bending, original, deep, or humorous shower thoughts/philosophical statements.\n"
+                "Do NOT filter out short texts or empty post bodies; the thought/riddle is typically in the title.\n\n"
+            )
+        else:
+            system_prompt_base += "Strictly filter out: Meta-text, updates, announcements, lists, short FAQs, wholesome content with no conflict, or text under 800 characters.\n\n"
+
+        system_prompt = (
+            system_prompt_base +
             "Analyze context/pronouns to extract narrator gender (MALE/FEMALE).\n\n"
             "Output ONLY a raw, minified JSON object. No markdown wrappers, no backticks, no prose.\n"
             "Required Keys:\n"
@@ -606,6 +663,94 @@ class RedditScraper:
         self._save_history()
         self.log.info("Marked post %s as scraped", post_id)
 
+    def _intelligent_llm_filter_shower(self, candidates: List[Dict[str, Any]]) -> List[str]:
+        """Send candidates to Gemini to select the best shower thoughts.
+
+        Args:
+            candidates: List of post dictionaries.
+
+        Returns:
+            List of selected post ID strings.
+        """
+        if not candidates:
+            return []
+
+        max_thoughts = self.cfg.get("riddle", {}).get("max_thoughts") or self.cfg.get("shower", {}).get("max_thoughts", 5)
+
+        candidate_texts = []
+        for p in candidates:
+            body_summary = p.get("body", "")[:300]
+            candidate_texts.append(
+                f"ID: {p.get('id')}\n"
+                f"Title: {p.get('title')}\n"
+                f"Body: {body_summary}\n"
+                f"---"
+            )
+        candidates_str = "\n".join(candidate_texts)
+
+        # Build list placeholder like ["id1","id2","id3","id4","id5"]
+        placeholders = [f"\"id{i+1}\"" for i in range(max_thoughts)]
+        placeholders_str = ",".join(placeholders)
+
+        system_prompt = (
+            "You are an advanced Social Media Analytics Engine specialized in algorithmic virality for vertical videos.\n"
+            f"Analyze the candidate thoughts and select exactly {max_thoughts} thoughts that have the absolute highest probability of going viral together.\n"
+            "Evaluate them based on mind-bending outrage/shock, debatability, and interest.\n\n"
+            f"Output ONLY a raw, minified JSON object with the key 'ids' containing a list of the {max_thoughts} selected Reddit IDs. No markdown wrappers, no backticks, no prose.\n"
+            "Example Output:\n"
+            f"{{\"ids\":[{placeholders_str}]}}"
+        )
+
+        max_retries = 3
+        backoff_seconds = [15, 30, 60]
+        
+        for attempt in range(max_retries + 1):
+            try:
+                current_key = self._api_keys[attempt % len(self._api_keys)] if self._api_keys else self._api_key
+                self.log.info("Querying Gemini for shower thoughts selection (attempt %d/%d)...",
+                              attempt + 1, max_retries + 1)
+                from google import genai
+                client = genai.Client(api_key=current_key)
+                
+                response = client.models.generate_content(
+                     model=self._model,
+                     contents=f"{system_prompt}\n\nCandidate Posts:\n{candidates_str}"
+                )
+                
+                result = (response.text or "").strip()
+                if result.startswith("```"):
+                    lines = result.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    result = "\n".join(lines).strip()
+                
+                import json
+                try:
+                    data = json.loads(result)
+                    ids = data.get("ids", [])
+                    if isinstance(ids, list) and len(ids) == max_thoughts:
+                        return ids
+                except Exception:
+                    # Fallback parsing
+                    found_ids = []
+                    for p in candidates:
+                        if p["id"] in result:
+                            found_ids.append(p["id"])
+                    if len(found_ids) >= max_thoughts:
+                        return found_ids[:max_thoughts]
+                
+                return []
+            except Exception as exc:
+                if attempt < max_retries:
+                    self.log.warning("Gemini shower story selection attempt failed: %s. Retrying...", exc)
+                    time.sleep(backoff_seconds[attempt])
+                else:
+                    self.log.error("Gemini shower story selection failed: %s", exc)
+        return []
+
+
     def get_best_story(self) -> Optional[Dict[str, Any]]:
         """Scrape all configured subreddits and return the top-scoring story.
 
@@ -648,3 +793,123 @@ class RedditScraper:
         self._history.clear()
         self._save_history()
         self.log.warning("History ledger cleared")
+
+    def fetch_comments(self, post_id: str, subreddit_name: str) -> List[Dict[str, Any]]:
+        """Fetch comments for a specific post using the keyless RSS comments feed.
+
+        Args:
+            post_id: The ID of the Reddit post.
+            subreddit_name: Subreddit name (without 'r/' prefix).
+
+        Returns:
+            A list of comment dicts, each with keys: 'author', 'body', 'id'.
+        """
+        user_agent = self.reddit_cfg.get("user_agent", "")
+        if not user_agent or "YourRedditUsername" in user_agent or "YOUR_" in user_agent:
+            user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        url = f"https://www.reddit.com/r/{subreddit_name}/comments/{post_id}.rss"
+        max_retries = 3
+        
+        thread_cfg = self.cfg.get("thread", {})
+        min_words = thread_cfg.get("min_comment_words", 15)
+        max_words = thread_cfg.get("max_comment_words", 150)
+        max_comments = thread_cfg.get("max_comments", 4)
+
+        for attempt in range(max_retries + 1):
+            ua = random.choice(_USER_AGENTS) if (not user_agent or "YourRedditUsername" in user_agent or "YOUR_" in user_agent) else user_agent
+            headers = {
+                "User-Agent": ua,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Ch-Ua": '"Not A(MeatPage;Bypass;1.0", "Chromium";"121", "Google Chrome";"121"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+            }
+            try:
+                self.log.debug("GET %s (attempt %d/%d)", url, attempt + 1, max_retries + 1)
+                response = requests.get(url, headers=headers, timeout=15)
+
+                if response.status_code == 429:
+                    if attempt < max_retries:
+                        self.log.warning(
+                            "Reddit RSS comments rate-limited (HTTP 429) for post %s. "
+                            "Sleeping 30 seconds before retry %d/%d...",
+                            post_id, attempt + 1, max_retries
+                        )
+                        time.sleep(30)
+                        continue
+                    else:
+                        self.log.error(
+                            "Reddit RSS comments rate-limited (HTTP 429) for post %s. Failed after %d retries.",
+                            post_id, max_retries
+                        )
+                        return []
+
+                if response.status_code != 200:
+                    self.log.error(
+                        "Failed to fetch post %s comments RSS: HTTP %d",
+                        post_id,
+                        response.status_code,
+                    )
+                    return []
+
+                root = ET.fromstring(response.content)
+                ns = {'atom': 'http://www.w3.org/2005/Atom'}
+
+                comments = []
+                for entry in root.findall('atom:entry', ns):
+                    id_node = entry.find('atom:id', ns)
+                    raw_id = id_node.text if id_node is not None else ""
+                    if not raw_id or "t1_" not in raw_id:
+                        continue
+
+                    author_node = entry.find('atom:author/atom:name', ns)
+                    author = author_node.text if author_node is not None else "[deleted]"
+                    if author.startswith("/u/"):
+                        author = author[3:]
+
+                    if author.lower() in ("automoderator", "[deleted]", "deleted"):
+                        continue
+
+                    content_node = entry.find('atom:content', ns)
+                    content_html = content_node.text if content_node is not None else ""
+
+                    body = ""
+                    match = re.search(r'<div class="md">(.*?)</div>', content_html, re.DOTALL)
+                    if match:
+                        body_html = match.group(1)
+                        body = re.sub(r'<[^>]+>', '', body_html)
+                        body = html.unescape(body).strip()
+
+                    if not body or body.lower() in ("[removed]", "[deleted]"):
+                        continue
+
+                    words = len(body.split())
+                    if words < min_words or words > max_words:
+                        continue
+
+                    comments.append({
+                        "id": raw_id.split('_')[1] if '_' in raw_id else raw_id,
+                        "author": author,
+                        "body": body,
+                    })
+
+                self.log.info("Found %d comments passing filters for post %s", len(comments), post_id)
+                return comments[:max_comments]
+
+            except Exception as exc:
+                self.log.error(
+                    "Error fetching comments for post %s: %s",
+                    post_id,
+                    exc,
+                )
+                return []
+        return []

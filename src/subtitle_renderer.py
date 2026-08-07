@@ -42,9 +42,17 @@ class SubtitleRenderer:
         pipeline_cfg = config.get("pipeline", {})
 
         # Font settings - default to 65 or 95 (for max_words=1) for readable vertical format
-        self.font_family: str = sub_cfg.get("font_family", "Arial")
+        self.font_family: str = sub_cfg.get("font_family", "Arial Black")
         self.max_words: int = int(sub_cfg.get("max_words", 1))
-        default_font_size = 95 if self.max_words == 1 else 65
+        
+        # Override for shower thoughts mode: force single word and large font size
+        pipeline_mode = pipeline_cfg.get("pipeline_mode", "monologue")
+        if pipeline_mode == "shower":
+            self.max_words = 1
+            default_font_size = 95
+        else:
+            default_font_size = 95 if self.max_words == 1 else 65
+            
         self.font_size: int = int(sub_cfg.get("font_size", default_font_size))
         self.font_bold: bool = bool(sub_cfg.get("font_bold", True))
 
@@ -57,7 +65,7 @@ class SubtitleRenderer:
             "passive_stroke_color", "#000000"
         )
         self.passive_stroke_width: int = int(
-            sub_cfg.get("passive_stroke_width", 2)
+            sub_cfg.get("passive_stroke_width", 5)
         )
 
         # Active pass
@@ -69,7 +77,7 @@ class SubtitleRenderer:
             "active_stroke_color", "#000000"
         )
         self.active_stroke_width: int = int(
-            sub_cfg.get("active_stroke_width", 3)
+            sub_cfg.get("active_stroke_width", 6)
         )
 
         # Layout
@@ -128,6 +136,8 @@ class SubtitleRenderer:
                 
                 if name_clean == "arial":
                     candidates = ["arialbd.ttf", "arial.ttf"] if self.font_bold else ["arial.ttf"]
+                elif name_clean in ("arialblack", "ariblk"):
+                    candidates = ["ariblk.ttf"]
                 elif name_clean == "calibri":
                     candidates = ["calibrib.ttf", "calibri.ttf"] if self.font_bold else ["calibri.ttf"]
                 elif name_clean == "segoeui":
@@ -237,6 +247,36 @@ class SubtitleRenderer:
     # ------------------------------------------------------------------
     # Word position calculation
     # ------------------------------------------------------------------
+    def _wrap_words_by_pixel_width(
+        self,
+        words: List[Dict[str, Any]],
+        font: str,
+        font_size: int,
+        max_pixel_width: int,
+    ) -> List[List[Dict[str, Any]]]:
+        """Wrap words into lines dynamically based on their measured pixel width and character length."""
+        lines: List[List[Dict[str, Any]]] = [[]]
+        
+        for w in words:
+            if not lines[-1]:
+                # First word in the line
+                lines[-1].append(w)
+            else:
+                # Test if adding this word to the current line exceeds max_pixel_width
+                current_words = lines[-1] + [w]
+                line_text = " ".join([wd["word"] for wd in current_words]).upper()
+                width, _ = self._measure_text(line_text, font, font_size)
+                
+                # Check character limit from config as a fallback check
+                chars_len = len(" ".join([wd["word"] for wd in current_words]))
+                
+                if width > max_pixel_width or chars_len > self.max_chars_per_line:
+                    lines.append([w])
+                else:
+                    lines[-1].append(w)
+                    
+        return lines
+
     def _calculate_word_positions(
         self,
         sentence_words: List[Dict[str, Any]],
@@ -247,7 +287,7 @@ class SubtitleRenderer:
     ) -> List[Dict[str, Any]]:
         """Calculate the pixel position of every word inside a sentence.
 
-        The sentence is wrapped according to *max_chars_per_line* and
+        The sentence is wrapped dynamically based on pixel width and
         each word receives ``{word, x, y, width, height, line_index}``.
 
         Args:
@@ -261,57 +301,59 @@ class SubtitleRenderer:
             List of position dicts, one per word, in the same order.
         """
         # ------ Build wrapped lines ------
-        lines: List[List[Dict[str, Any]]] = [[]]
-        current_line_chars = 0
+        max_pixel_width = int(frame_width * 0.82)
+        lines = self._wrap_words_by_pixel_width(
+            sentence_words, font, font_size, max_pixel_width
+        )
 
-        for w in sentence_words:
-            word_text = w["word"]
-            word_len = len(word_text)
+        # Use font metrics for line height consistency
+        pil_font = self._get_pil_font(font, font_size)
+        ascent, descent = pil_font.getmetrics()
+        font_line_height = ascent + descent
+        line_spacing = int(font_line_height * 0.15)
 
-            if (
-                lines[-1]
-                and current_line_chars + 1 + word_len > max_chars_per_line
-            ):
-                lines.append([])
-                current_line_chars = 0
+        # Pre-calculate line bboxes to get exact drawing Y offsets
+        from PIL import Image, ImageDraw
+        img = Image.new("RGBA", (1, 1))
+        draw = ImageDraw.Draw(img)
 
-            lines[-1].append(w)
-            current_line_chars += word_len + (1 if current_line_chars > 0 else 0)
+        line_y_offsets = []
+        current_y = 0
 
-        # ------ Measure each word ------
-        space_w, _ = self._measure_text(" ", font, font_size)
-        _, line_height = self._measure_text("Aqy|", font, font_size)
-        line_spacing = int(line_height * 0.25)
+        for line_words in lines:
+            line_str = " ".join([w["word"] for w in line_words]).upper()
+            bbox = draw.textbbox((0, 0), line_str, font=pil_font)
+            line_y_offsets.append(current_y - bbox[1])
+            current_y += font_line_height + line_spacing
 
         positions: List[Dict[str, Any]] = []
 
         for line_idx, line_words in enumerate(lines):
-            word_widths: List[int] = []
-            word_heights: List[int] = []
-            for w in line_words:
-                ww, wh = self._measure_text(w["word"], font, font_size)
-                word_widths.append(ww)
-                word_heights.append(wh)
+            line_str = " ".join([w["word"] for w in line_words]).upper()
+            tw, _ = self._measure_text(line_str, font, font_size)
 
-            total_line_width = (
-                sum(word_widths) + space_w * max(len(line_words) - 1, 0)
-            )
-
-            # Centre horizontally relative to the frame
-            x_offset = (frame_width - total_line_width) // 2
+            # Center the line horizontally relative to the frame
+            line_x_offset = (frame_width - tw) // 2
 
             for i, w in enumerate(line_words):
+                # Measure prefix text width before this word
+                if i == 0:
+                    prefix_w = 0
+                else:
+                    prefix_text = " ".join([wd["word"] for wd in line_words[:i]]).upper() + " "
+                    prefix_w, _ = self._measure_text(prefix_text, font, font_size)
+
+                ww, wh = self._measure_text(w["word"].upper(), font, font_size)
                 positions.append(
                     {
                         "word": w["word"],
-                        "x": x_offset,
-                        "y": line_idx * (line_height + line_spacing),
-                        "width": word_widths[i],
-                        "height": word_heights[i],
+                        "x": line_x_offset + prefix_w,
+                        "y": line_y_offsets[line_idx],
+                        "width": ww,
+                        "height": wh,
                         "line_index": line_idx,
                     }
                 )
-                x_offset += word_widths[i] + space_w
 
         return positions
 
@@ -335,23 +377,44 @@ class SubtitleRenderer:
         from moviepy.editor import ImageClip  # type: ignore[import-untyped]
         import numpy as np
 
+        text = text.upper()
         font_ref = self._resolve_font()
         pil_font = self._get_pil_font(font_ref, font_size)
 
-        # Measure text bounding box
+        # Set up a dummy draw context to measure lines
         img = Image.new("RGBA", (1, 1))
         draw = ImageDraw.Draw(img)
-        bbox = draw.multiline_textbbox((0, 0), text, font=pil_font, align=align)
-        
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
 
-        # Determine canvas size (add padding for stroke/bounding safety)
+        lines = text.split("\n")
+        line_data = []
+        max_line_w = 0
+
+        for line in lines:
+            bbox = draw.textbbox((0, 0), line, font=pil_font)
+            lw = bbox[2] - bbox[0]
+            lh = bbox[3] - bbox[1]
+            line_data.append((line, bbox, lw, lh))
+            if lw > max_line_w:
+                max_line_w = lw
+
+        ascent, descent = pil_font.getmetrics()
+        font_line_height = ascent + descent
+        line_spacing = int(font_line_height * 0.15)
+
+        line_y_offsets = []
+        current_y = 0
+        for idx, (line, bbox, lw, lh) in enumerate(line_data):
+            line_y_offsets.append(current_y - bbox[1])
+            current_y += font_line_height + line_spacing
+
+        th = current_y - line_spacing
+
+        # Determine canvas size
         if size is not None:
             w = int(size[0])
             h = int(size[1] if size[1] is not None else (th + stroke_width * 2 + 10))
         else:
-            w = int(tw + stroke_width * 2 + 10)
+            w = int(max_line_w + stroke_width * 2 + 10)
             h = int(th + stroke_width * 2 + 10)
 
         w, h = max(w, 1), max(h, 1)
@@ -359,23 +422,31 @@ class SubtitleRenderer:
         canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
 
-        # Calculate drawing origin
-        if size is not None:
-            tx = int((w - tw) // 2 - bbox[0])
-        else:
-            tx = int(stroke_width + 2 - bbox[0])
-            
-        ty = int((h - th) // 2 - bbox[1])
+        y_start = stroke_width + 5
 
-        draw.multiline_text(
-            (tx, ty),
-            text,
-            font=pil_font,
-            fill=color,
-            stroke_width=stroke_width,
-            stroke_fill=stroke_color,
-            align=align,
-        )
+        # Render line by line
+        for idx, (line, bbox, lw, lh) in enumerate(line_data):
+            # Center horizontally relative to canvas
+            line_x = (w - lw) // 2 - bbox[0]
+            line_y = y_start + line_y_offsets[idx]
+
+            # Draw outline stroke
+            if stroke_width > 0 and stroke_color:
+                draw.text(
+                    (line_x, line_y),
+                    line,
+                    font=pil_font,
+                    fill=stroke_color,
+                    stroke_width=stroke_width,
+                    stroke_fill=stroke_color,
+                )
+            # Draw inner fill
+            draw.text(
+                (line_x, line_y),
+                line,
+                font=pil_font,
+                fill=color,
+            )
 
         img_np = np.array(canvas)
         color_np = img_np[:, :, :3]
@@ -389,7 +460,7 @@ class SubtitleRenderer:
         clip = clip.set_start(start)
         clip = clip.set_duration(duration)
 
-        return clip, (w, h), tx, ty
+        return clip, (w, h), 0, y_start
 
     # ------------------------------------------------------------------
     # Active Word Canvas Helper
@@ -412,6 +483,7 @@ class SubtitleRenderer:
         from moviepy.editor import ImageClip  # type: ignore[import-untyped]
         import numpy as np
 
+        word_text = word_text.upper()
         pil_font = self._get_pil_font(font_ref, font_size)
 
         w, h = size
@@ -421,14 +493,21 @@ class SubtitleRenderer:
         canvas = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
 
-        # Render ONLY the active word at the matching sentence layout coordinate
+        # Render ONLY the active word (No drop shadow as per user request)
+        if stroke_width > 0 and stroke_color:
+            draw.text(
+                draw_pos,
+                word_text,
+                font=pil_font,
+                fill=stroke_color,
+                stroke_width=stroke_width,
+                stroke_fill=stroke_color,
+            )
         draw.text(
             draw_pos,
             word_text,
             font=pil_font,
             fill=color,
-            stroke_width=stroke_width,
-            stroke_fill=stroke_color,
         )
 
         img_np = np.array(canvas)
@@ -452,21 +531,26 @@ class SubtitleRenderer:
         self,
         sentence: Dict[str, Any],
         frame_size: Tuple[int, int],
+        font_size: int,
     ) -> Tuple[Any, Tuple[int, int], int, int]:
         """Render the full sentence/chunk as a muted passive ImageClip.
 
         Args:
             sentence: Sentence dict with ``text``, ``start``, ``end``.
             frame_size: ``(width, height)`` of the video frame.
+            font_size: Desired point size of the font.
 
         Returns:
             Tuple of (clip, canvas_size, tx, ty).
         """
         frame_width, frame_height = frame_size
 
-        wrapped = self._wrap_sentence_text(
-            sentence["words"], self.max_chars_per_line
+        font_ref = self._resolve_font()
+        max_pixel_width = int(frame_width * 0.82)
+        lines = self._wrap_words_by_pixel_width(
+            sentence["words"], font_ref, font_size, max_pixel_width
         )
+        wrapped = "\n".join([" ".join([w["word"] for w in line]) for line in lines])
 
         duration = sentence["end"] - sentence["start"]
         if duration <= 0:
@@ -476,7 +560,7 @@ class SubtitleRenderer:
 
         clip, canvas_size, tx, ty = self._create_pil_text_clip(
             text=wrapped,
-            font_size=self.font_size,
+            font_size=font_size,
             color=self.passive_color,
             stroke_color=self.passive_stroke_color,
             stroke_width=self.passive_stroke_width,
@@ -503,6 +587,7 @@ class SubtitleRenderer:
         canvas_size: Tuple[int, int],
         tx: int,
         ty: int,
+        font_size: int,
     ) -> List[Any]:
         """Render individual active-highlight clips for each word.
 
@@ -517,6 +602,7 @@ class SubtitleRenderer:
             canvas_size: ``(w, h)`` of the passive sentence canvas.
             tx: Horizontal draw origin of the passive text block inside the canvas.
             ty: Vertical draw origin of the passive text block inside the canvas.
+            font_size: Point size of the active font.
 
         Returns:
             List of MoviePy ``ImageClip`` objects.
@@ -528,12 +614,14 @@ class SubtitleRenderer:
         sent_words = sentence.get("words", [])
         font_ref = self._resolve_font()
 
+        zoom_enabled = self.config.get("subtitles", {}).get("word_zoom_animation", True)
+
         for i, w in enumerate(sent_words):
             if i >= len(positions):
                 continue
 
             pos = positions[i]
-            word_text = w["word"]
+            word_text = w["word"].upper()
             word_start = w["start"]
             word_end = w["end"]
             duration = word_end - word_start
@@ -544,30 +632,94 @@ class SubtitleRenderer:
             from PIL import Image, ImageDraw
             img_temp = Image.new("RGBA", (1, 1))
             draw_temp = ImageDraw.Draw(img_temp)
-            pil_font = self._get_pil_font(font_ref, self.font_size)
+            pil_font = self._get_pil_font(font_ref, font_size)
             word_bbox = draw_temp.textbbox((0, 0), word_text, font=pil_font)
             
-            # Absolute drawing coordinate inside the matching canvas
-            # draw_x = word_x_canvas - word_bbox[0]
-            draw_x = int(pos["x"] - (frame_width - canvas_size[0]) // 2 - word_bbox[0])
-            draw_y = int(ty + pos["y"])
+            # Determine active word highlight color based on speaker if available
+            speaker = w.get("speaker")
+            if speaker:
+                speaker_clean = str(speaker).strip().upper()
+                if speaker_clean == "MALE":
+                    word_color = "#00FF00"  # Green text highlight
+                elif speaker_clean == "FEMALE":
+                    word_color = "#FFE500"  # Yellow text highlight
+                else:
+                    word_color = self.active_color
+            else:
+                word_color = self.active_color
+            
+            if zoom_enabled:
+                from moviepy.editor import vfx
+                # Calculate small cropped canvas size for the word
+                pad = self.active_stroke_width * 2 + 10
+                w_w = pos["width"] + pad
+                w_h = pos["height"] + pad
+                
+                # Draw position relative to the small canvas
+                draw_x = self.active_stroke_width + 5 - word_bbox[0]
+                draw_y = self.active_stroke_width + 5 - word_bbox[1]
+                
+                word_clip = self._create_active_word_clip(
+                    word_text=word_text,
+                    font_ref=font_ref,
+                    font_size=font_size,
+                    color=word_color,
+                    stroke_color=self.active_stroke_color,
+                    stroke_width=self.active_stroke_width,
+                    size=(w_w, w_h),
+                    draw_pos=(draw_x, draw_y),
+                    duration=duration,
+                    start=word_start,
+                    opacity=self.active_opacity,
+                )
+                
+                # Dynamic shrink-to-fit pop animation (zoom_factor down to 1.0x in 0.12s)
+                zoom_factor = self.config.get("subtitles", {}).get("word_zoom_factor", 1.05)
+                zoom_diff = zoom_factor - 1.0
 
-            word_clip = self._create_active_word_clip(
-                word_text=word_text,
-                font_ref=font_ref,
-                font_size=self.font_size,
-                color=self.active_color,
-                stroke_color=self.active_stroke_color,
-                stroke_width=self.active_stroke_width,
-                size=canvas_size,
-                draw_pos=(draw_x, draw_y),
-                duration=duration,
-                start=word_start,
-                opacity=self.active_opacity,
-            )
+                def zoom_effect(t):
+                    if t < 0.12:
+                        return 1.0 + zoom_diff * (1.0 - t / 0.12)
+                    return 1.0
+                
+                word_clip = word_clip.fx(vfx.resize, zoom_effect)
+                
+                # Compensate for the internal drawing offset to align the active text pixel-perfectly with passive text
+                pos_x = int(pos["x"] - (self.active_stroke_width + 5) + word_bbox[0])
+                pos_y = int(y_base + ty + pos["y"] - (self.active_stroke_width + 5) + word_bbox[1])
+                
+                # Center-anchored zoom positioning function to keep scaling focused on the word's center
+                def make_zoom_pos(px, py, width_w, height_h):
+                    def zoom_pos(t):
+                        scale = zoom_effect(t)
+                        x = px + (width_w / 2.0) * (1.0 - scale)
+                        y = py + (height_h / 2.0) * (1.0 - scale)
+                        return (x, y)
+                    return zoom_pos
 
-            # Center-align on the exact same frame coordinate as the passive clip
-            word_clip = word_clip.set_position(("center", y_base))
+                word_clip = word_clip.set_position(make_zoom_pos(pos_x, pos_y, w_w, w_h))
+            else:
+                # Absolute drawing coordinate inside the matching canvas
+                draw_x = int(pos["x"] - (frame_width - canvas_size[0]) // 2 - word_bbox[0])
+                draw_y = int(ty + pos["y"])
+
+                word_clip = self._create_active_word_clip(
+                    word_text=word_text,
+                    font_ref=font_ref,
+                    font_size=font_size,
+                    color=word_color,
+                    stroke_color=self.active_stroke_color,
+                    stroke_width=self.active_stroke_width,
+                    size=canvas_size,
+                    draw_pos=(draw_x, draw_y),
+                    duration=duration,
+                    start=word_start,
+                    opacity=self.active_opacity,
+                )
+
+                # Center-align on the exact same frame coordinate as the passive clip
+                word_clip = word_clip.set_position(("center", y_base))
+                
             clips.append(word_clip)
 
         return clips
@@ -655,10 +807,33 @@ class SubtitleRenderer:
     # ------------------------------------------------------------------
     # Main public interface
     # ------------------------------------------------------------------
+    def _get_scaled_font_size(self, text: str, font_ref: str, max_width: int) -> int:
+        from PIL import Image, ImageDraw
+        img = Image.new("RGBA", (1, 1))
+        draw = ImageDraw.Draw(img)
+        
+        current_size = self.font_size
+        while current_size > 30:
+            pil_font = self._get_pil_font(font_ref, current_size)
+            lines = text.split("\n")
+            max_line_w = 0
+            for line in lines:
+                bbox = draw.textbbox((0, 0), line.upper(), font=pil_font)
+                line_w = bbox[2] - bbox[0]
+                if line_w > max_line_w:
+                    max_line_w = line_w
+            
+            if max_line_w > max_width - 10:
+                current_size -= 4
+            else:
+                break
+        return max(current_size, 30)
+
     def render(
         self,
         timestamp_data: Dict[str, Any],
         frame_size: Tuple[int, int] = (1080, 1920),
+        skip_until: float = 0.0,
     ) -> List[Any]:
         """Produce double-pass subtitle clips for every sentence.
 
@@ -668,6 +843,9 @@ class SubtitleRenderer:
                 a ``sentences`` key.
             frame_size: ``(width, height)`` of the target video frame.
                 Defaults to 1080 × 1920 (vertical short-form).
+            skip_until: Time threshold (seconds). Subtitle chunks starting
+                before this time will be omitted to avoid overlapping with
+                the Reddit title card screenshot.
 
         Returns:
             Flat list of MoviePy clip objects (``TextClip`` instances)
@@ -690,6 +868,18 @@ class SubtitleRenderer:
             virtual_sentences = self._split_sentence_into_chunks(sentence, max_words=self.max_words)
             short_sentences.extend(virtual_sentences)
 
+        if skip_until > 0.0:
+            filtered_short_sentences = []
+            for s in short_sentences:
+                if s["start"] < skip_until:
+                    continue
+                filtered_short_sentences.append(s)
+            self.logger.info(
+                f"skip_until={skip_until}s: Omitted {len(short_sentences) - len(filtered_short_sentences)} "
+                f"subtitle chunks that fall within the title card duration."
+            )
+            short_sentences = filtered_short_sentences
+
         all_clips: List[Any] = []
         total_passive = 0
         total_active = 0
@@ -698,12 +888,15 @@ class SubtitleRenderer:
             sent_words = sentence.get("words", [])
             if not sent_words:
                 continue
+            
+            # Keep font size constant across the entire video
+            scaled_font_size = self.font_size
 
-            # Calculate pixel positions for this sentence chunk
+            # Calculate pixel positions for this sentence chunk using scaled_font_size
             positions = self._calculate_word_positions(
                 sent_words,
                 font_ref,
-                self.font_size,
+                scaled_font_size,
                 frame_width,
                 self.max_chars_per_line,
             )
@@ -711,7 +904,7 @@ class SubtitleRenderer:
             # Pass 1: passive (full sentence chunk)
             try:
                 passive_clip, canvas_size, tx, ty = self._render_passive_sentence(
-                    sentence, frame_size
+                    sentence, frame_size, scaled_font_size
                 )
                 all_clips.append(passive_clip)
                 total_passive += 1
@@ -726,7 +919,7 @@ class SubtitleRenderer:
             # Pass 2: active (per-word highlights inside shared canvas width/height)
             try:
                 active_clips = self._render_active_words(
-                    sentence, positions, frame_size, canvas_size, tx, ty
+                    sentence, positions, frame_size, canvas_size, tx, ty, scaled_font_size
                 )
                 all_clips.extend(active_clips)
                 total_active += len(active_clips)

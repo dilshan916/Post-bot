@@ -1,0 +1,67 @@
+name: 2x Daily Automated Reel Publisher
+
+on:
+  schedule:
+    # Runs twice daily at 06:00 UTC (11:30 AM IST) and 18:00 UTC (11:30 PM IST)
+    - cron: '0 6,18 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI anytime
+
+jobs:
+  auto_post:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install System Dependencies (FFmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps
+
+      - name: Ensure Kokoro Assets
+        run: |
+          mkdir -p assets/kokoro
+          python -c "
+          import urllib.request, os
+          m_path = 'assets/kokoro/kokoro-v0_19.onnx'
+          v_path = 'assets/kokoro/voices.bin'
+          if not os.path.exists(m_path):
+              print('Downloading Kokoro ONNX model...')
+              urllib.request.urlretrieve('https://github.com/thewhitemamba/kokoro-onnx/releases/download/v0.19/kokoro-v0_19.onnx', m_path)
+          if not os.path.exists(v_path):
+              print('Downloading Kokoro voices bin...')
+              urllib.request.urlretrieve('https://github.com/thewhitemamba/kokoro-onnx/releases/download/v0.19/voices.bin', v_path)
+          "
+
+      - name: Run Bot Auto-Post Pipeline
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+        run: |
+          python main.py --mode monologue --batch 1
+
+      - name: Commit Scraped History
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/scraped_history.json
+          git commit -m "auto: update scraped history [skip ci]" || echo "No changes to commit"
+          git push

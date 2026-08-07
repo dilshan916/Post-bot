@@ -131,7 +131,11 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     """
     config_path = Path(path) if path else DEFAULT_CONFIG_PATH
     if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
+        fallback_path = PROJECT_ROOT / "config.example.yaml"
+        if fallback_path.exists():
+            config_path = fallback_path
+        else:
+            raise FileNotFoundError(f"Config file not found: {config_path}")
 
     with open(config_path, "r", encoding="utf-8") as fh:
         cfg: Dict[str, Any] = yaml.safe_load(fh)
@@ -140,6 +144,31 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     missing = [k for k in required_keys if k not in cfg]
     if missing:
         raise ValueError(f"Missing required config keys: {missing}")
+
+    # Environment variable overrides for CI/CD and GitHub Actions
+    if "GEMINI_API_KEY" in os.environ:
+        gem_key = os.environ["GEMINI_API_KEY"].strip()
+        if gem_key:
+            cfg.setdefault("llm", {})["api_key"] = gem_key
+            cfg.setdefault("llm", {})["api_keys"] = [gem_key]
+    if "GROQ_API_KEY" in os.environ:
+        groq_key = os.environ["GROQ_API_KEY"].strip()
+        if groq_key:
+            cfg.setdefault("groq", {})["api_key"] = groq_key
+    if "FACEBOOK_PAGE_ACCESS_TOKEN" in os.environ:
+        fb_token = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"].strip()
+        if fb_token:
+            fb_cfg = cfg.setdefault("facebook", {})
+            fb_cfg["page_access_token"] = fb_token
+            if "FACEBOOK_PAGE_ID" in os.environ and os.environ["FACEBOOK_PAGE_ID"].strip():
+                fb_cfg["page_id"] = os.environ["FACEBOOK_PAGE_ID"].strip()
+            pages = fb_cfg.get("pages", [])
+            if pages and isinstance(pages, list):
+                for p in pages:
+                    if isinstance(p, dict):
+                        p["access_token"] = fb_token
+                        if "FACEBOOK_PAGE_ID" in os.environ and os.environ["FACEBOOK_PAGE_ID"].strip():
+                            p["page_id"] = os.environ["FACEBOOK_PAGE_ID"].strip()
 
     return cfg
 
@@ -257,7 +286,18 @@ def file_hash(path: str, algo: str = "sha256") -> str:
 # Duration & Text Helpers
 # ---------------------------------------------------------------------------
 def estimate_duration_sec(text: str, wpm: int = 155) -> float:
-    """Estimate spoken duration from word count and WPM."""
+    """Estimate spoken duration from word count and WPM. Supports JSON dialog arrays."""
+    import json
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            total_words = 0
+            for block in parsed:
+                if isinstance(block, dict) and "text" in block:
+                    total_words += len(str(block["text"]).split())
+            return (total_words / wpm) * 60.0
+    except Exception:
+        pass
     words = len(text.split())
     return (words / wpm) * 60.0
 
@@ -306,3 +346,53 @@ def check_yt_dlp() -> bool:
     """Return True if yt-dlp is available on PATH."""
     import shutil
     return shutil.which("yt-dlp") is not None
+
+
+def resolve_speaker_category(speaker_str: str) -> str:
+    """Normalize custom character speaker names into 6 standard categories:
+    MALE, FEMALE, OLD_MALE, OLD_FEMALE, CHILD_MALE, CHILD_FEMALE.
+
+    This ensures that various custom names (e.g. 'Mom', 'Dave', 'Op', 'Brother')
+    map cleanly to the correct voices, backgrounds, and sticker visuals.
+    """
+    import re
+    s = speaker_str.strip().upper()
+    
+    # Direct match check for standard names first
+    if s in ("MALE", "FEMALE", "OLD_MALE", "OLD_FEMALE", "CHILD_MALE", "CHILD_FEMALE", "CHIBI_MALE", "CHIBI_FEMALE"):
+        if s == "CHIBI_MALE":
+            return "CHILD_MALE"
+        if s == "CHIBI_FEMALE":
+            return "CHILD_FEMALE"
+        return s
+
+    if s in ("INTRO", "OUTRO", "NARRATOR"):
+        return s
+        
+    # Split by non-alphanumeric characters to get individual tokens
+    tokens = set(re.findall(r"[A-Z0-9]+", s))
+    
+    # Check for child indicators first (e.g., child, kid, boy, girl, son, daughter, baby, toddler, chibi)
+    child_keywords = {"CHILD", "CHIBI", "KID", "BOY", "GIRL", "SON", "DAUGHTER", "BABY", "TODDLER", "KIDS", "BOYS", "GIRLS"}
+    is_child = not tokens.isdisjoint(child_keywords)
+    
+    # Check for elder/parent indicators (e.g., mom, mother, dad, father, stepdad, stepmom, mil, fil, in-law, uncle, aunt, old, grand)
+    old_keywords = {"OLD", "GRAND", "ELDER", "MOM", "MOTHER", "DAD", "FATHER", "STEPDAD", "STEPMOM", "MIL", "FIL", "IN-LAW", "INLAW", "UNCLE", "AUNT", "PARENT", "PARENTS", "GRANDPA", "GRANDMA", "GRANDFATHER", "GRANDMOTHER"}
+    is_old = not tokens.isdisjoint(old_keywords)
+
+    # Determine gender based on common male vs female indicator terms
+    male_keywords = {"MALE", "BOY", "SON", "DAD", "FATHER", "STEPDAD", "HUSBAND", "BOYFRIEND", "BROTHER", "UNCLE", "NEPHEW", "GRANDPA", "GRANDFATHER", "GROOM", "HE", "HIM", "GUY", "MAN", "FIL", "BRO"}
+    is_male = not tokens.isdisjoint(male_keywords)
+
+    # If it has user numbers (like USER_1, USER_2), we can alternate based on the index/hash
+    digits = re.findall(r"\d+", s)
+    if digits:
+        idx = int(digits[0])
+        is_male = (idx % 2 != 0)
+
+    if is_child:
+        return "CHILD_MALE" if is_male else "CHILD_FEMALE"
+    elif is_old:
+        return "OLD_MALE" if is_male else "OLD_FEMALE"
+    else:
+        return "MALE" if is_male else "FEMALE"

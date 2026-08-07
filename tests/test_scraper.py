@@ -259,8 +259,66 @@ def test_screenshot_hook_clip_creation(dummy_config, tmp_path):
     assert clip.start == 0.0
     # Clip should be positioned within frame bounds
     pos = clip.pos(0)
-    assert 0 <= pos[0] < 1080  # x within frame
+    assert -150 <= pos[0] < 1080  # x within frame (allows negative offset due to 1.25x title card scaling)
     assert 0 <= pos[1] < 1920  # y within frame
+
+    clip.close()
+
+
+def test_screenshot_comment_html_generation(dummy_config):
+    """Verify that comment HTML contains the username, body/text, and score."""
+    from src.screenshot_manager import ScreenshotManager
+
+    dummy_config["screenshot"] = {"theme": "dark"}
+    logger = MagicMock()
+    manager = ScreenshotManager(dummy_config, logger)
+
+    comment = {
+        "author": "reddit_legend",
+        "text": "This is an extremely witty and insightful comment.",
+        "score": 1250,
+    }
+
+    html = manager._build_comment_html(
+        author=comment["author"],
+        text=comment["text"],
+        score=comment["score"],
+        theme=manager._DARK_THEME,
+    )
+
+    assert "u/reddit_legend" in html
+    assert "This is an extremely witty and insightful comment." in html
+    assert "1.2k" in html
+    assert "#1A1A1B" in html
+
+
+def test_screenshot_comment_clip_creation(dummy_config, tmp_path):
+    """Verify comment clip has correct duration and starts at correct offset."""
+    from src.screenshot_manager import ScreenshotManager
+    from PIL import Image
+
+    dummy_config["screenshot"] = {
+        "card_width_pct": 0.88,
+    }
+    logger = MagicMock()
+    manager = ScreenshotManager(dummy_config, logger)
+
+    dummy_img = Image.new("RGBA", (920, 200), (26, 26, 27, 255))
+    png_path = tmp_path / "comment_screenshot.png"
+    dummy_img.save(str(png_path))
+
+    clip = manager.create_comment_clip(
+        screenshot_path=png_path,
+        frame_size=(1080, 1920),
+        start=5.0,
+        duration=4.5,
+    )
+
+    assert clip.duration == 4.5
+    assert clip.start == 5.0
+    pos = clip.pos(0)
+    assert -150 <= pos[0] < 1080
+    assert 0 <= pos[1] < 1920
 
     clip.close()
 
@@ -396,3 +454,279 @@ def test_reddit_scraper_intelligent_llm_filter_success(mock_genai_client, dummy_
     assert result["id"] == "post_winner"
     assert result["gender"] == "FEMALE"
     assert result["virality_reason"] == "High drama and conflict with wedding themes."
+
+@patch("requests.post")
+def test_script_rewriter_conversational_robust_parsing(mock_post, dummy_config):
+    """Verify that ScriptRewriter parses JSON with trailing commas and recovers broken JSON via regex."""
+    dummy_config["groq"] = {
+        "api_key": "test_groq_api_key_1234",
+        "model": "llama-3.3-70b-versatile"
+    }
+    dummy_config["pipeline"] = {
+        "pipeline_mode": "conversational"
+    }
+
+    # Case 1: Trailing commas in list & object, with contractions, code blocks & trailing comments
+    raw_response_1 = """
+    Here is the dialogue you requested:
+    ```json
+    [
+      {"speaker": "FEMALE", "text": "Hello world, I'm fine.",},
+      {"speaker": "MALE", "text": "Hi there. I don't care."}
+    ]
+    ```
+    Hope you like it!
+    """
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response_1}}]
+    }
+    mock_post.return_value = mock_response
+
+    rewriter = ScriptRewriter(dummy_config)
+    post = {"title": "Test Title", "body": "Test Body"}
+    cleaned_1 = rewriter.rewrite(post)
+
+    import json
+    parsed_1 = json.loads(cleaned_1)
+    assert len(parsed_1) == 2
+    assert parsed_1[0]["speaker"] == "FEMALE"
+    assert parsed_1[0]["text"] == "Hello world, I'm fine."
+    assert parsed_1[1]["speaker"] == "MALE"
+    assert parsed_1[1]["text"] == "Hi there. I don't care."
+
+    # Case 2: Broken JSON that fails parsing completely but has valid turns and contractions (regex recovery check)
+    raw_response_2 = """
+    [
+      {"speaker": "FEMALE", "text": "Dialogue one, I'm okay"},
+      {"speaker": "MALE", "text": "Dialogue two, it doesn't matter"
+    """ # Missing closing braces and brackets
+
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response_2}}]
+    }
+    cleaned_2 = rewriter.rewrite(post)
+    parsed_2 = json.loads(cleaned_2)
+    assert len(parsed_2) == 2  # Matches both dialogue turns successfully via regex
+    assert parsed_2[0]["speaker"] == "FEMALE"
+    assert parsed_2[0]["text"] == "Dialogue one, I'm okay"
+    assert parsed_2[1]["speaker"] == "MALE"
+    assert parsed_2[1]["text"] == "Dialogue two, it doesn't matter"
+
+    # Case 3: Completely messed up JSON with no valid tags (falls back to cleaned text)
+    raw_response_3 = '{"text": "A completely messed up response with missing speaker key"}'
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response_3}}]
+    }
+    cleaned_3 = rewriter.rewrite(post)
+    parsed_3 = json.loads(cleaned_3)
+    assert len(parsed_3) == 1
+    assert parsed_3[0]["speaker"] == "MALE"
+    assert "A completely messed up response" in parsed_3[0]["text"]
+    assert "{" not in parsed_3[0]["text"]
+
+    # Case 4: JSON containing raw literal newlines in quotes (standard JSON parsing fails, preprocessor cleans it)
+    raw_response_4 = """
+    [
+      {"speaker": "FEMALE", "text": "Line one
+      continued."},
+      {"speaker": "MALE", "text": "Line two."}
+    ]
+    """
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response_4}}]
+    }
+    cleaned_4 = rewriter.rewrite(post)
+    parsed_4 = json.loads(cleaned_4)
+    assert len(parsed_4) == 2
+    assert parsed_4[0]["speaker"] == "FEMALE"
+    assert parsed_4[0]["text"] == "Line one       continued."
+    assert parsed_4[1]["speaker"] == "MALE"
+    assert parsed_4[1]["text"] == "Line two."
+
+    # Case 5: Broken JSON with non-standard speakers (CHILD_MALE) and emotion keys
+    raw_response_5 = """
+    [
+      {"speaker": "CHILD_MALE", "emotion": "angry", "text": "Am I the jerk?"},
+      {"speaker": "MALE", "emotion": "worried", "text": "You are okay"
+    """
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response_5}}]
+    }
+    cleaned_5 = rewriter.rewrite(post)
+    parsed_5 = json.loads(cleaned_5)
+    assert len(parsed_5) == 2
+    assert parsed_5[0]["speaker"] == "CHILD_MALE"
+    assert parsed_5[0]["emotion"] == "angry"
+    assert parsed_5[0]["text"] == "Am I the jerk?"
+    assert parsed_5[1]["speaker"] == "MALE"
+    assert parsed_5[1]["emotion"] == "worried"
+    assert parsed_5[1]["text"] == "You are okay"
+
+
+@patch("requests.get")
+def test_reddit_scraper_scrape_stories_empty(mock_get, dummy_config):
+    """Verify that the scraper returns an empty list when requests fail or no entries exist."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_response.text = "Not Found"
+    mock_get.return_value = mock_response
+
+    scraper = RedditScraper(dummy_config)
+    stories = scraper.scrape_stories()
+    assert stories == []
+
+
+@patch("requests.get")
+def test_reddit_scraper_get_best_story_empty(mock_get, dummy_config):
+    """Verify that get_best_story() returns None cleanly when no qualifying stories are found."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b'<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>'
+    mock_get.return_value = mock_response
+
+    scraper = RedditScraper(dummy_config)
+    best = scraper.get_best_story()
+    assert best is None
+
+
+@patch("src.screenshot_manager.ScreenshotManager._render_and_capture")
+def test_screenshot_manager_capture_post_card(mock_render, dummy_config):
+    """Verify that capture_post_card writes to shower_{index}.png and calls render."""
+    from src.screenshot_manager import ScreenshotManager
+
+    def mock_write(html, path):
+        path.write_text("dummy image content", encoding="utf-8")
+    mock_render.side_effect = mock_write
+
+    logger = MagicMock()
+    manager = ScreenshotManager(dummy_config, logger)
+
+    story = {
+        "subreddit": "Showerthoughts",
+        "title": "Water is wet",
+        "author": "john_doe",
+        "score": 1234,
+    }
+
+    out_path = manager.capture_post_card(story, 2)
+    assert out_path.name == "shower_2.png"
+    assert mock_render.called
+
+    # Clean up
+    if out_path.exists():
+        out_path.unlink()
+
+
+@patch("requests.post")
+def test_script_rewriter_riddle_pure_generation(mock_post, dummy_config):
+    """Verify that ScriptRewriter riddle mode handles empty candidates for pure generation."""
+    dummy_config["groq"] = {
+        "api_key": "test_groq_api_key_1234",
+        "model": "llama-3.3-70b-versatile"
+    }
+    dummy_config["pipeline"] = {
+        "pipeline_mode": "riddle"
+    }
+    dummy_config["riddle"] = {
+        "pure_generation": True,
+        "max_thoughts": 3
+    }
+
+    raw_response = """
+    [
+      {"speaker": "MALE", "emotion": "surprised", "text": "I bet you one hundred dollars you can't solve this!"},
+      {"speaker": "FEMALE", "emotion": "talking", "text": "What is your riddle?"},
+      {"speaker": "MALE", "emotion": "explaining", "text": "I have hands but no arms."},
+      {"speaker": "FEMALE", "emotion": "thinking", "text": "Is it a clock?"},
+      {"speaker": "MALE", "emotion": "talking", "text": "Comment below to get pinned!"}
+    ]
+    """
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": raw_response}}]
+    }
+    mock_post.return_value = mock_response
+
+    from src.script_rewriter import ScriptRewriter
+    rewriter = ScriptRewriter(dummy_config)
+    # Story has empty candidates
+    story = {
+        "title": "Fun Riddle Compilation",
+        "candidates": []
+    }
+    cleaned = rewriter.rewrite(story)
+    
+    # Assert that requests.post was called
+    assert mock_post.called
+    
+    # Check payload sent to Groq
+    call_args = mock_post.call_args
+    json_data = call_args[1]["json"]
+    user_message = json_data["messages"][1]["content"]
+    
+    assert "riddle" in user_message
+    
+    # Assert parsed response is valid JSON
+    import json
+    parsed = json.loads(cleaned)
+    assert len(parsed) == 5
+    assert parsed[0]["speaker"] == "MALE"
+    assert parsed[3]["emotion"] == "thinking"
+
+@patch("time.sleep")
+@patch("requests.post")
+def test_script_rewriter_groq_key_rotation(mock_post, mock_sleep, dummy_config):
+    # Set config to use groq with multiple keys
+    dummy_config["groq"] = {
+        "api_key": "first_key",
+        "api_keys": ["first_key", "second_key"],
+        "model": "llama-3.3-70b-versatile"
+    }
+    
+    # First response fails with 429 rate limit
+    mock_response_fail = MagicMock()
+    mock_response_fail.status_code = 429
+    mock_response_fail.text = "Rate limit exceeded"
+    
+    # Second response succeeds
+    mock_response_success = MagicMock()
+    mock_response_success.status_code = 200
+    mock_response_success.json.return_value = {
+        "choices": [{
+            "message": {
+                "content": "Rewritten by second key."
+            }
+        }]
+    }
+    
+    mock_post.side_effect = [mock_response_fail, mock_response_success]
+    
+    from src.script_rewriter import ScriptRewriter
+    rewriter = ScriptRewriter(dummy_config)
+    post = {
+        "title": "AITA for telling my friend to leave?",
+        "body": "WIBTA? Had a friend over.",
+    }
+    cleaned = rewriter.rewrite(post)
+    
+    # Verify requests.post was called twice
+    assert mock_post.call_count == 2
+    
+    # Check headers for first call (should use first_key)
+    first_call_kwargs = mock_post.call_args_list[0][1]
+    assert first_call_kwargs["headers"]["Authorization"] == "Bearer first_key"
+    
+    # Check headers for second call (should use second_key)
+    second_call_kwargs = mock_post.call_args_list[1][1]
+    assert second_call_kwargs["headers"]["Authorization"] == "Bearer second_key"
+    
+    # Verify result contains the content from second key
+    assert "second key" in cleaned
+
+
+
+

@@ -10,7 +10,9 @@ requests>=2.31.0
 google-genai>=0.1.1
 
 
-# edge-tts
+# Kokoro TTS (82M local engine) & edge-tts
+kokoro-onnx>=0.3.1
+soundfile>=0.12.1
 edge-tts>=6.1.12
 
 # Audio Processing

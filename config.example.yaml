@@ -31,7 +31,7 @@ reddit:
   post_limit: 25 # Max posts to fetch per subreddit
   min_upvotes: 10 # Minimum score to consider
   min_word_count: 10 # Minimum words in the post body
-  max_word_count: 350 # Maximum words (skip novels)
+  max_word_count: 500 # Maximum words (skip novels)
 
 # ----------------------------------------------------------
 # LLM Script Rewriting (Optional — leave blank to use regex fallback)
@@ -47,17 +47,33 @@ llm:
   max_tokens: 2048
 
 # ----------------------------------------------------------
-# Groq API (Script Rewriter LLM)
+# Groq API (Script Rewriter LLM with Key Rotation)
 # ----------------------------------------------------------
 groq:
-  api_key: "YOUR_GROQ_API_KEY_HERE"
+  api_key: "YOUR_PRIMARY_GROQ_API_KEY"
+  api_keys:
+    - "YOUR_PRIMARY_GROQ_API_KEY"
+    - "YOUR_BACKUP_GROQ_API_KEY"
   model: "llama-3.3-70b-versatile"
 
 # ----------------------------------------------------------
-# Edge TTS Engine
+# Local Kokoro-82M / Edge-TTS Engine
 # ----------------------------------------------------------
 tts:
-  voice: "en-US-ChristopherNeural" # Default natural US male voice
+  engine: "kokoro" # "kokoro" | "edge-tts"
+  voice: "am_adam" # Default voice for Kokoro
+  male_voice: "am_adam"
+  female_voice: "af_bella"
+  old_male_voice: "bm_george"
+  old_female_voice: "af_nicole"
+  child_male_voice: "am_puck"
+  child_female_voice: "af_sky"
+  edge_tts_voice: "en-US-ChristopherNeural"
+  edge_tts_female_voice: "en-US-JennyNeural"
+  kokoro:
+    model_path: "assets/kokoro/kokoro-v0_19.onnx"
+    voices_path: "assets/kokoro/voices.bin"
+    execution_provider: "CPUExecutionProvider"
 
 # ----------------------------------------------------------
 # Acoustic Cadence Settings
@@ -81,6 +97,8 @@ whisper:
   model_size: "medium" # tiny | base | small | medium | large
   language: "en"
   min_vram_gb: 5.0 # Minimum free VRAM to use Whisper GPU
+  device: "auto" # auto | cuda | cpu (auto uses GPU if VRAM >= min_vram_gb, else CPU)
+  cpu_model_size: "base" # tiny | base | small | medium (use base/tiny on CPU for speed)
 
   # Fallback: Vosk
   vosk_model: "vosk-model-small-en-us-0.15"
@@ -91,28 +109,29 @@ whisper:
 # ----------------------------------------------------------
 subtitles:
   # Font settings
-  font_family: "Arial" # System font or path in assets/fonts/
+  font_family: "Arial Black" # System font or path in assets/fonts/
   font_size: 95
   font_bold: true
-  max_words: 1
+  max_words: 4
+  word_zoom_animation: true # Pop-in zoom effect on active highlighted words
 
   # Passive pass (full sentence)
   passive_color: "#FFFFFF"
-  passive_opacity: 0.40
+  passive_opacity: 1.0
   passive_stroke_color: "#000000"
-  passive_stroke_width: 2
+  passive_stroke_width: 8
 
   # Active pass (highlighted word)
   active_color: "#FFE500"
   active_opacity: 1.0
   active_stroke_color: "#000000"
-  active_stroke_width: 3
+  active_stroke_width: 8
 
   # Position (fraction of frame height from top)
-  vertical_position: 0.72
+  vertical_position: 0.48
 
   # Max characters per line before wrapping
-  max_chars_per_line: 35
+  max_chars_per_line: 18
 
 # ----------------------------------------------------------
 # Reddit Screenshot Hook
@@ -123,6 +142,7 @@ screenshot:
   display_duration_sec: 3.5 # How long the card is visible
   fade_duration_sec: 0.8 # Fade-out duration
   card_width_pct: 0.88 # Card width as fraction of frame width
+  ken_burns: true # Centered slow zoom animation for the title card hook
 
 # ----------------------------------------------------------
 # Smart Splitter
@@ -151,6 +171,7 @@ video:
   audio_codec: "aac"
   crf: 18 # Quality (lower = better, 18 = visually lossless)
   preset: "medium" # ultrafast | fast | medium | slow | veryslow
+  threads: 3 # Number of CPU threads to use for rendering (3 leaves 1 core free for system stability)
   pixel_format: "yuv420p"
   bitrate: "5000k" # Video bitrate (e.g. 5000k for high quality Reels)
   audio_bitrate: "192k" # Audio bitrate (e.g. 192k for high quality stereo audio)
@@ -186,9 +207,177 @@ video:
 # Pipeline Settings
 # ----------------------------------------------------------
 pipeline:
-  batch_size: 1 # Stories per run (override with --batch N)
+  batch_size: 3 # Stories per run (override with --batch N)
   temp_dir: "temp" # Temp working directory
   log_dir: "output/logs"
   log_level: "INFO" # DEBUG | INFO | WARNING | ERROR
   scraped_history: "data/scraped_history.json"
   keep_temp_files: false # Set true for debugging
+  approve_scripts: true # Require manual approval of rewritten scripts in CMD
+  audio_ducking: true # Dynamically adjust background music volume around speaker pauses
+  pipeline_mode: "conversational" # Default mode: monologue | conversational
+  outro_enabled: true # Append a "Follow for more" audio/visual block at the end of the video
+  outro_text: "Follow for more!"
+
+# ----------------------------------------------------------
+# Pipeline Mode Configurations
+# ----------------------------------------------------------
+monologue:
+  subreddits:
+    - "TrueOffMyChest"
+    - "stories"
+    - "familyissues"
+  voice: "en-US-ChristopherNeural"
+  system_prompt: |
+    You are a voice actor recording an urgent, deeply personal voice memo. You are NOT an AI assistant, and you are NOT editing a post. You are speaking your raw, unedited personal reality directly into the microphone.
+
+    Strictly enforce these narrative audio rules:
+    1. Speak exclusively in the first person ("I", "my", "me").
+    2. CRITICAL CLICKBAIT HOOK: The very first sentence MUST be a hyper-dramatic, shocking, or deeply emotional confession. Start at the absolute climax, betrayal, or conflict of the story. Do NOT build up slowly.
+       * Bad (too slow): "My brother-in-law called my wife a bad parent at dinner."
+       * Good (dramatic hook): "I stood there silently while my own family tore my wife to shreds."
+       * Bad (too slow): "My best friend said a derogatory slur at our wedding."
+       * Good (dramatic hook): "My wedding ended in pure chaos when my childhood best friend insulted my wife."
+    3. Jump directly into the emotional core within the first 5 words. Absolutely ZERO introductory padding, greetings, meta-commentary, or setup transitions. Do not say "So," "Okay," "Hey guys," "Reddit," or "Today."
+    4. Translate all text shorthand into full, natural spoken-word phrases (e.g., convert "AITA" to "Am I the jerk", "ex" to "ex-partner", "MIL" to "mother-in-law").
+    5. Write in brief, punchy, human sentences optimized for rapid, continuous Text-to-Speech breathing patterns and word-by-word dynamic subtitles. Keep the tension scaling upward.
+    6. Strip out all editorial structural markers like "EDIT:", "TL;DR:", or chronological bullet points. Merge into a seamless, gripping, continuous narrative flow.
+
+    CRITICAL CONSTRAINT: Output ONLY the raw spoken script text. No titles, no introduction, no concluding notes, no meta-tags, no conversational filler. If you output a single word of commentary outside the character's direct spoken script, the pipeline will break. Begin speaking NOW:
+
+conversational:
+  subreddits:
+    - "AmItheAsshole"
+    - "texts"
+    - "relationship_advice"
+  male_voice: "en-US-GuyNeural"
+  female_voice: "en-US-MichelleNeural"
+  # Speaker Stickers Configuration
+  stickers_enabled: true
+  male_sticker_path: "assets/stickers/male_neutral.png"
+  female_sticker_path: "assets/stickers/female_neutral.png"
+  sticker_size: 450
+  sticker_y_position: 0.80
+  # Static Background Images Configuration (Set to true to use images instead of gameplay videos)
+  use_static_backgrounds: false
+  male_background_path: "assets/backgrounds/home_male.png"
+  female_background_path: "assets/backgrounds/home_female.png"
+  old_male_background_path: "assets/backgrounds/home_male.png"
+  old_female_background_path: "assets/backgrounds/home_female.png"
+  chibi_male_background_path: "assets/backgrounds/home_male.png"
+  chibi_female_background_path: "assets/backgrounds/home_female.png"
+  system_prompt: |
+    You are a dramatic script writer. Convert the following story into a strict structured dialogue format.
+    You must strictly output a single, well-formatted JSON object with absolutely nothing else. Do not include any markdown wrap around headers, intro, or outro text outside the JSON.
+
+    JSON STRUCTURE REQUIRED:
+    {
+      "caption": "A short, viral description under 10 words followed by EXACTLY 5 relevant hashtags",
+      "pinned_comment": "A value-driven, organic question based directly on the story's conflict to engage viewers in debate",
+      "script": [
+        {"speaker": "MALE", "emotion": "angry", "text": "Sentence spoken by adult male character..."},
+        {"speaker": "FEMALE", "emotion": "worried", "text": "Sentence spoken by adult female character..."},
+        {"speaker": "OLD_MALE", "emotion": "sad", "text": "Sentence spoken by older male character (e.g., father, grandfather, elder boss)..."},
+        {"speaker": "OLD_FEMALE", "emotion": "neutral", "text": "Sentence spoken by older female character (e.g., mother, grandmother, elder boss)..."},
+        {"speaker": "CHILD_MALE", "emotion": "crying", "text": "Sentence spoken by young/child male character..."},
+        {"speaker": "CHILD_FEMALE", "emotion": "happy", "text": "Sentence spoken by young/child female character..."}
+      ]
+    }
+
+    Rules:
+    1. Split the narrative into a sequence of conversational turns.
+    2. CRITICAL: The dialogue turns must strictly alternate between speaker roles. Under no circumstances should the same speaker have two turns in a row.
+    3. CRITICAL: Double-check role and age attribution. Use MALE/FEMALE for adult characters, OLD_MALE/OLD_FEMALE for older adult/elderly characters, and CHILD_MALE/CHILD_FEMALE for children or younger characters.
+    4. CRITICAL: Analyze the emotional context, tone, and subtext of each spoken line. Assign one of these 15 exact emotions to the "emotion" field: neutral, happy, angry, crying, surprised, thinking, explaining, worried, sighing, thumbsup, talking, waving, stressed, lovestruck, sleeping. Label the true feeling of the character (e.g. if they say "I'm fine!" but are clearly upset, label it "crying" or "worried").
+    5. Make it dramatic, engaging, and flow naturally like a text message drama or conversation.
+    6. Ensure all dialogue text blocks end with appropriate sentence punctuation (?, !, or .) so the TTS engine pauses naturally.
+    7. The first block must start immediately with the hook. No intro or explanation.
+    8. Translate all text shorthand into full, natural spoken-word phrases (e.g., convert "AITA" to "Am I the jerk", "ex" to "ex-partner", "MIL" to "mother-in-law").
+    9. CRITICAL CLIFFHANGER ENDING: Never resolve the conflict, give a clean wrap-up, or have the characters agree or state "you're not the jerk" at the end. Instead, end the conversation abruptly on a high-tension argument, a dramatic realization, or an unresolved question (e.g., "Wait, what do you mean by that?", "I can't believe you've been lying to me this whole time!"). This leaves a cliffhanger that drives viewers to debate in the comments. The last turn MUST leave the situation hanging.
+    10. CAPTION AND HASHTAG HYGIENE: The caption field must be extremely brief (under 10 words) and end with exactly 5 hashtags. Avoid spammy tags like #viral, #trending. Instead, use 2 genre tags (e.g., #relationship, #storytime) and 3 specific contextual tags defining the story's subject (e.g., if the story is about a mother-in-law, use #relationshipadvice #drama #family).
+    11. UTIS COMPLIANCE COMMENT: The pinned_comment field must contain a unique, thought-provoking question derived organically from the story's conflict. It must stimulate a genuine interest-driven debate from the viewer (e.g. 'Who is in the wrong here? Drop your honest take below!').
+    12. Do NOT include markdown formatting like ```json or ```. Output ONLY the raw JSON string.
+
+# ----------------------------------------------------------
+# Thread Mode Config
+# ----------------------------------------------------------
+thread:
+  subreddits:
+    - "AskReddit"
+    - "AskWomen"
+    - "ask"
+  post_limit: 5
+  max_comments: 4
+  min_comment_words: 15
+  max_comment_words: 250
+  voices:
+    - "en-US-ChristopherNeural"
+    - "en-US-JennyNeural"
+    - "en-US-GuyNeural"
+    - "en-US-MichelleNeural"
+  system_prompt: |
+    You are a professional script compiler. Convert the following Reddit post question and its comment answers into a strict structured compilation format.
+    You must output the script in a strict, parsable JSON Array format, mapping roles cleanly:
+    [
+      {"speaker": "NARRATOR", "voice": "en-US-ChristopherNeural", "author": "reddit_question", "score": 9500, "text": "What is the thread question text here?"},
+      {"speaker": "USER_1", "voice": "en-US-GuyNeural", "author": "username1", "score": 1200, "text": "Answer 1..."},
+      {"speaker": "USER_2", "voice": "en-US-JennyNeural", "author": "username2", "score": 850, "text": "Answer 2..."}
+    ]
+
+    Rules:
+    1. The first block must represent the thread question (speaker: "NARRATOR").
+    2. Each subsequent block represents a clean, rewritten user comment.
+    3. Choose a voice from monologue/conversational voices dynamically for each comment (assigning it to the "voice" field).
+    4. Clean all comments of Reddit-specific meta elements (like "EDIT", "TL;DR", "Update").
+    5. Translate all text shorthand into full spoken-word phrases (e.g. "AITA" -> "Am I the jerk", "ex" -> "ex-partner").
+    6. Ensure the text ends with appropriate sentence punctuation (?, !, or .) so the TTS engine pauses naturally.
+    7. Do NOT include markdown formatting like ```json or ```. Output ONLY the raw JSON array string.
+
+
+# ----------------------------------------------------------
+# Fun Riddle Mode Config (Comment-to-Pin System / 30s Loop)
+# ----------------------------------------------------------
+riddle:
+  pure_generation: true # Bypasses Reddit scraping entirely and generates riddles via LLM.
+  default_voice: "en-US-ChristopherNeural"
+  system_prompt: |
+    You are an elite, viral short-form scriptwriter specialized in creating high-retention Facebook Reels for a premium US/UK audience in "Fun Riddle Mode". Your primary objective is to output a flawless JSON object that satisfies 2026 Meta Algorithmic Compliance (UTIS and Anti-Engagement Bait models).
+
+    You must strictly output a single, well-formatted JSON object with absolutely nothing else. Do not include any markdown wrap around headers, intro, or outro text outside the JSON.
+
+    JSON STRUCTURE REQUIRED:
+    {
+      "answer": "The single-word or short-phrase answer to the riddle",
+      "caption": "A punchy, brief description under 10 words followed by EXACTLY 5 relevant hashtags",
+      "pinned_comment": "A value-driven, highly specific question based directly on the riddle content to engage viewers organically",
+      "script": [
+        {"speaker": "MALE", "emotion": "excited", "text": "The opening hook line stating the riddle's stakes or twist setup"},
+        {"speaker": "FEMALE", "emotion": "curious", "text": "Reaction or prompt for clues"},
+        {"speaker": "MALE", "emotion": "explaining", "text": "The riddle clues delivered clearly"},
+        {"speaker": "FEMALE", "emotion": "thinking", "text": "A relatable wrong guess or expression of confusion"},
+        {"speaker": "MALE", "emotion": "talking", "text": "The closing call to action challenge pushing for shares"}
+      ]
+    }
+
+    STRICT CONTENT RULES (META 2026 UTIS COMPLIANCE):
+    1. CRITICAL BAN ON ENGAGEMENT-BAIT: You are absolutely FORBIDDEN from using generic hype phrases like "Only 1% can solve this", "Only geniuses know this", "I bet $100 you will fail", or "Comment below to get pinned". The algorithm downranks this phrasing immediately.
+    2. THE HOOK: The opening dialogue must state the riddle's actual high stakes, an intriguing logical claim, or a surprising visual setup directly tied to the specific twist of the riddle. Keep it under 3 seconds of pacing.
+    3. MIX OF CASUAL & MATH RIDDLES: You must alternate between famous classic word riddles (e.g., candle, shadow, map) and clever mathematical/numerical logic riddles (e.g., divisibility constraints like "greater than 5, less than 15, only divisible by 3", sequence patterns, or numeric wordplay like "What is between 4 and 6 but is not 5? Answer: the word 'and'"). Keep them simple, engaging, and mind-bending.
+    4. CAPTION AND HASHTAG HYGIENE: The caption field must be extremely brief and end with exactly 5 hashtags. Avoid spammy tags like #viral, #trending, #fbreels, #explore. Instead, use 2 riddle-centric tags (e.g., #riddles, #brainteasers) and 3 specific contextual tags defining the riddle's subject (e.g., if the riddle is about a river, use #river, #nature, #puzzle).
+    5. UTIS COMPLIANCE COMMENT: The pinned_comment field must contain a unique, thought-provoking question or teaser derived organically from the riddle's logic. It must stimulate a genuine interest-driven response from the viewer (e.g., "If it has hands but can't clap, what else can it do? Lock your honest guess below!"). No templated or lazy CTAs allowed.
+    6. SCRIPT PACING: Keep the overall script short and fast-paced (between 15 to 25 seconds estimated duration). Ensure word transitions are seamless for high-retention text-to-speech generation.
+
+
+# ----------------------------------------------------------
+# Facebook Page Reels Publishing (Auto-Post Riddle Mode)
+# ----------------------------------------------------------
+facebook:
+  enabled: false
+  page_id: "YOUR_FACEBOOK_PAGE_ID_HERE"
+  page_access_token: "YOUR_PAGE_ACCESS_TOKEN_HERE"
+  conversational_page_id: "YOUR_CONVERSATIONAL_FACEBOOK_PAGE_ID_HERE"
+  conversational_page_access_token: "YOUR_CONVERSATIONAL_PAGE_ACCESS_TOKEN_HERE"
+  monologue_page_id: "YOUR_MONOLOGUE_FACEBOOK_PAGE_ID_HERE"
+  monologue_page_access_token: "YOUR_MONOLOGUE_PAGE_ACCESS_TOKEN_HERE"
+  caption: "Can you solve this famous riddle? Comment your answer below! 🧠🔥 #riddle #brainteaser #mindgames #viral"
+

@@ -1,116 +1,154 @@
-# 🤖 Reddit Daily Bot
+# 🤖 Reddit Daily Bot (Post-bot) — Getting Started Guide & Documentation
 
-An automated vertical Reel/Short generator that compiles engaging Reddit stories into high-retention, subtitled vertical videos overlayed on gameplay footage.
+An automated vertical video generator & Facebook Reel publisher that compiles Reddit stories, threads, and riddles into high-retention subtitled vertical Reels (9:16) overlayed on gameplay footage.
 
-Designed with a modern, modular **Hybrid LLM Architecture** (Gemini for selector analytics + Groq for script-writing), Edge-TTS voice generation, dynamic double-pass subtitling, and metadata-scrambling video composite filters to ensure organic reach and prevent algorithmic deduplication.
-
----
-
-## ✨ Features
-
-- **🧠 Hybrid LLM Strategy**:
-  - **Analytics (Gemini 2.5 Flash)**: Batch-evaluates the top 15 qualified candidate stories simultaneously based on strict engagement engagement metrics (High Emotional Trigger, Debatability, and Strong 3-second Openers) to select a single winner with the highest virality potential.
-  - **Creative (Groq - Llama 3.3 70B)**: Rewrites the raw Reddit self-text into a high-retention first-person narration script with natural spoken pacing, removing Meta-elements (EDIT, TL;DR, formatting apologies) and resolving abbreviations (e.g., *AITA* → *"Am I the jerk"*).
-- **🎙️ Acoustic Cadence Processing**:
-  - Injects realistic, breathing-room pauses dynamically based on punctuation cadence (comma, period, long dash pauses).
-  - Implements a **vocal decay hack** using tail-phrase rooms and noise floors to avoid sudden audio clip cuts.
-  - **Dynamic Voice Selector**: Automatically detects the narrator's gender from the post context and switches voices dynamically (*MALE* → `en-US-ChristopherNeural`, *FEMALE* → `en-US-JennyNeural`).
-- **💬 Double-Pass Active Subtitles**:
-  - Renders stylized word-by-word active-word highlighted subtitles centered exactly on spoken timing.
-  - Features glassmorphic/bordered typography options, background opacity control, and custom layouts.
-- **📸 Screenshot Hook Overlay**:
-  - Programmatically generates and overlays a Reddit post title card as a visual hook for the first 3.5 seconds, complete with a smooth fade-out.
-- **🎮 Video Hash Scrambling & Compositing**:
-  - Downloads gameplay background footages dynamically via `yt-dlp`.
-  - Runs background videos through a custom **FFmpeg Hash Destruction Pipeline** (scales, minor shifts, temporal noise injection, 1% audio speedups) to bypass social media reuse detection algorithms.
-  - Blends master audio with a background ambient music track mixed down to a balanced 7% (-23.1 dB) volume with a beautiful 1.5-second fade-out.
-- **⚡ Smart Part Splitter**:
-  - Automatically slices long-form posts crossing the length limits into multiple Reels, rendering them as part series (e.g., *"Part 1 of 3"*) with custom watermark indicators.
+Features a **Hybrid LLM Architecture** (Gemini 2.5 Flash for analytics & story ranking + Groq Llama 3.3 70B for script rewriting with key rotation), **Dual TTS Engines** (Local Kokoro-82M + Edge-TTS fallback), dynamic double-pass active word subtitling, and direct **Facebook Page Reel Scheduling** in Sri Lankan Time (SLT UTC+05:30).
 
 ---
 
-## 🛠️ Setup Instructions
+## ✨ Key Features & Pipeline Modes
 
-### Prerequisites
-- Python `3.10` or higher
-- FFmpeg installed and added to your system's PATH variables
+### 🎬 Pipeline Modes
+1. **Monologue Mode**: High-stakes narrative stories with a single narrator, screenshot hook title card, and active word subtitles.
+2. **Conversational Mode**: Multi-character text-message drama scripts with distinct Kokoro voice roles (`MALE`, `FEMALE`, `OLD_FEMALE`, `OLD_MALE`, `CHILD_MALE`, `CHILD_FEMALE`).
+3. **AskReddit Thread Mode**: Curated top comments compiled into thread-style video series with author headers and upvote counts.
+4. **Fun Riddle Mode**: Interactive riddles generated directly via Gemini Flash with suspense countdown timers.
+5. **Batch Hybrid Scheduler (Mode 5)**: End-to-end automation that generates and schedules up to **42 Reels over a 7-day period** (2 posts/day at **09:30 AM** and **07:30 PM SLT**) with upfront CLI script approval (`y`/`n`), zero comment clutter, and hardware cool-down protection.
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/YOUR_GITHUB_USERNAME/Post-bot.git
-   cd Post-bot
-   ```
+### 🎙️ Dual TTS Engine Architecture
+- **Kokoro-82M (Local, High Quality)**: Ultra-realistic offline text-to-speech utilizing `CPUExecutionProvider` for 100% stability across all GPUs. Supports distinct voice assignments (`am_adam`, `af_bella`, `bm_george`, `af_nicole`, `am_puck`, `af_sky`).
+- **Edge-TTS (Cloud Fallback)**: Zero-setup cloud fallback engine that automatically engages if local Kokoro assets are absent.
 
-2. Initialize virtual environment and install dependencies:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. Set up configuration:
-   - Copy `config.example.yaml` to `config.yaml`:
-     ```bash
-     cp config.example.yaml config.yaml
-     ```
-   - Edit `config.yaml` to fill in your API keys (Reddit API, Gemini, and Groq).
+### 🧠 Hybrid LLM Engine
+- **Gemini 2.5 Flash**: Batch analytics engine that evaluates candidate stories and ranks the top viral concepts based on emotional triggers, debatability, and retention potential.
+- **Groq (Llama 3.3 70B)**: Creative script rewriter enforcing strict retention constraints (high-stakes openers, curiosity-gap teasers, delayed escalation reveals) with automatic multi-key rotation on rate limits.
 
 ---
 
-## ⚙️ Configuration
+## 🛠️ Step-by-Step Getting Started Guide
 
-The application is configured using a master `config.yaml` file. Key parameters include:
+### 1. Prerequisites
+- **Python**: Version `3.10` or higher installed.
+- **FFmpeg**: Installed and added to your system's PATH.
 
-| Section | Parameter | Description |
-| :--- | :--- | :--- |
-| **reddit** | `subreddits` | List of target subreddits to scrape stories from. |
-| | `min_upvotes` | Minimum score to consider a post. |
-| **llm** | `api_keys` | Rotated pool of Gemini API keys for story selection. |
-| **groq** | `api_key` | Groq API key used for script rewriting. |
-| | `model` | Model name (default: `llama-3.3-70b-versatile`). |
-| **video** | `bitrate` | Explicit video bitrate standard (e.g. `5000k` to prevent upload compression blur). |
-| | `audio_bitrate` | High quality audio standard (`192k`). |
-| | `preset` | H.264 compression speed (`medium` or `fast`). |
+### 2. Environment & Dependency Setup
+
+```powershell
+# 1. Clone the repository
+git clone https://github.com/dilshan916/Post-bot.git
+cd Post-bot
+
+# 2. Create and activate a virtual environment
+python -m venv .venv
+.venv\Scripts\activate
+
+# 3. Install required Python packages
+pip install -r requirements.txt
+
+# 4. Install Playwright browser binaries (required for title card screenshot rendering)
+playwright install chromium
+```
 
 ---
 
-## 🚀 Usage
+### 3. Kokoro-82M Local TTS Setup (Recommended)
 
-Run the full end-to-end pipeline:
-```bash
+To use high-quality local offline TTS narration, download the two model assets into `assets/kokoro/`:
+
+1. **`kokoro-v0_19.onnx`** (~310 MB): [Download Link](https://huggingface.co/thewh1teagle/Kokoro/resolve/main/kokoro-v0_19.onnx)
+2. **`voices.bin`** (~5.5 MB): [Download Link](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin)
+
+*Or automatically download both files via Python:*
+```powershell
+.venv\Scripts\python -c "
+import requests, pathlib
+d = pathlib.Path('assets/kokoro'); d.mkdir(parents=True, exist_ok=True)
+for url, name in [('https://huggingface.co/thewh1teagle/Kokoro/resolve/main/kokoro-v0_19.onnx', 'kokoro-v0_19.onnx'), ('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin', 'voices.bin')]:
+    print('Downloading', name)
+    resp = requests.get(url, stream=True)
+    with open(d / name, 'wb') as f: f.write(resp.content)
+print('Kokoro setup complete!')
+"
+```
+*(If model files are omitted, `Post-bot` automatically logs a warning and uses Edge-TTS smoothly).*
+
+---
+
+### 4. Configuration Setup (`config.yaml`)
+
+Copy `config.example.yaml` to `config.yaml`:
+```powershell
+cp config.example.yaml config.yaml
+```
+
+Open `config.yaml` and configure your API keys and target pages:
+
+```yaml
+# Gemini API Key(s) for analytics & story selection
+llm:
+  api_keys:
+    - "YOUR_GEMINI_API_KEY_1"
+    - "YOUR_GEMINI_API_KEY_2"
+
+# Groq API Key(s) for script rewriting (Rotated automatically on rate limits)
+groq:
+  api_key: "gsk_PRIMARY_GROQ_KEY"
+  api_keys:
+    - "gsk_PRIMARY_GROQ_KEY"
+    - "gsk_BACKUP_GROQ_KEY"
+
+# TTS Engine Choice
+tts:
+  engine: "kokoro" # "kokoro" | "edge-tts"
+  male_voice: "am_adam"
+  female_voice: "af_bella"
+  old_male_voice: "bm_george"
+  old_female_voice: "af_nicole"
+
+# Facebook Page Access Tokens & Page IDs for Auto-Scheduling
+facebook:
+  pages:
+    - page_name: "Daily Stories"
+      page_id: "YOUR_PAGE_ID_1"
+      access_token: "YOUR_PAGE_ACCESS_TOKEN_1"
+    - page_name: "Reddit Stories"
+      page_id: "YOUR_PAGE_ID_2"
+      access_token: "YOUR_PAGE_ACCESS_TOKEN_2"
+    - page_name: "Pick your poison"
+      page_id: "YOUR_PAGE_ID_3"
+      access_token: "YOUR_PAGE_ACCESS_TOKEN_3"
+```
+
+---
+
+### 5. Running the Bot
+
+Launch the interactive console application:
+```powershell
 python main.py
 ```
 
-### Advanced Options
-
-- **Batch Mode** (Process multiple stories):
-  ```bash
-  python main.py --batch 3
-  ```
-
-- **Dry-Run Validation** (Validates configuration, folders, dependencies without executing APIs or rendering):
-  ```bash
-  python main.py --dry-run
-  ```
-
-- **Run Single Components**:
-  ```bash
-  python main.py --component scraper
-  python main.py --component tts --test-phrase "Testing TTS engine"
-  python main.py --component whisper --test-audio path/to/audio.wav
-  ```
+#### Menu Options:
+- **`1` — Monologue Mode**: Renders a single narration video from Reddit stories.
+- **`2` — Conversational Mode**: Renders a multi-speaker text drama video.
+- **`3` — AskReddit Thread Mode**: Renders a top-comments thread video.
+- **`4` — Fun Riddle Mode**: Renders a riddle video with countdown timer.
+- **`5` — Batch Hybrid Scheduler (Recommended for Full Automation)**:
+  1. Select target page: `1. Daily Stories`, `2. Reddit Stories`, `3. Pick your poison`, or `4. All Pages`.
+  2. The bot scrapes top posts and uses Gemini to rank up to 14 viral concepts.
+  3. **Interactive Script Approval**: Review each rewritten Groq script in the CLI and enter `y` to approve or `n` to reject.
+  4. **Automated Rendering & Scheduling**: Once approved, videos are rendered one by one and scheduled to your Facebook page at **09:30 AM** and **07:30 PM SLT**, with a 30-second hardware cooldown between videos.
 
 ---
 
 ## 🧪 Testing
 
-Run the complete unit test suite containing 24 tests covering scrapers, splitters, screenshot card builders, and Groq mock validations:
-```bash
+Run the full automated unit test suite (54 unit tests covering TTS engines, scrapers, splitters, speaker resolution, and Facebook publisher):
+```powershell
 python -m pytest
 ```
 
 ---
 
 ## 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.

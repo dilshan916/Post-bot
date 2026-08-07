@@ -90,7 +90,7 @@ class GameplayDownloader:
         cmd: List[str] = [
             "yt-dlp",
             "-f",
-            "bestvideo[height>=1920]+bestaudio/best",
+            "bestvideo[height>=720]+bestaudio/best",
             "--merge-output-format",
             "mp4",
             "-o",

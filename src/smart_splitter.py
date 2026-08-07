@@ -59,6 +59,158 @@ class SmartSplitter:
             - ``estimated_duration``  (float, seconds)
             - ``watermark_config``  (dict | None)
         """
+        import json
+        is_json = False
+        is_monologue_json = False
+        dialogue_blocks = []
+        parsed_dict = None
+        try:
+            parsed = json.loads(script)
+            if isinstance(parsed, dict):
+                parsed_dict = parsed
+                if "script" in parsed:
+                    if isinstance(parsed["script"], list):
+                        dialogue_blocks = parsed["script"]
+                        is_json = True
+                    elif isinstance(parsed["script"], str):
+                        is_monologue_json = True
+            elif isinstance(parsed, list) and all(isinstance(x, dict) and "speaker" in x and "text" in x for x in parsed):
+                is_json = True
+                dialogue_blocks = parsed
+        except Exception:
+            pass
+
+        if is_json:
+            total_dur = sum(estimate_duration_sec(block["text"], self.wpm) for block in dialogue_blocks)
+            self.logger.info(
+                f"SmartSplitter: estimated duration {format_duration(total_dur)} (Conversational) "
+                f"(max {format_duration(self.max_duration_sec)})"
+            )
+
+            if total_dur <= self.max_duration_sec:
+                self.logger.info("Script fits in a single part — no split needed")
+                return [
+                    self._build_part(
+                        script_text=script,
+                        part_number=1,
+                        total_parts=1,
+                    )
+                ]
+
+            # Distribute dialogue blocks across parts
+            parts: List[List[Dict[str, Any]]] = []
+            current_part: List[Dict[str, Any]] = []
+            current_dur: float = 0.0
+
+            for block in dialogue_blocks:
+                block_dur = estimate_duration_sec(block["text"], self.wpm)
+                if current_dur + block_dur > self.max_duration_sec and current_part:
+                    parts.append(current_part)
+                    current_part = [block]
+                    current_dur = block_dur
+                else:
+                    current_part.append(block)
+                    current_dur += block_dur
+            if current_part:
+                parts.append(current_part)
+
+            # Build output dicts
+            result: List[Dict[str, Any]] = []
+            total_parts = len(parts)
+            for idx, part_blocks in enumerate(parts, start=1):
+                if parsed_dict and ("caption" in parsed_dict or "pinned_comment" in parsed_dict):
+                    part_obj = dict(parsed_dict)
+                    part_obj["script"] = part_blocks
+                    part_script = json.dumps(part_obj)
+                else:
+                    part_script = json.dumps(part_blocks)
+                result.append(
+                    self._build_part(
+                        script_text=part_script,
+                        part_number=idx,
+                        total_parts=total_parts,
+                    )
+                )
+
+            # For logging
+            for p in result:
+                self.logger.info(
+                    f"  Part {p['part_number']}/{p['total_parts']} — "
+                    f"{format_duration(p['estimated_duration'])} "
+                    f"(Conversational, {len(json.loads(p['script_text']))} blocks)"
+                )
+            return result
+
+        if is_monologue_json and parsed_dict is not None:
+            monologue_text = parsed_dict["script"]
+            total_dur = estimate_duration_sec(monologue_text, self.wpm)
+            self.logger.info(
+                f"SmartSplitter: estimated duration {format_duration(total_dur)} (Monologue JSON) "
+                f"(max {format_duration(self.max_duration_sec)})"
+            )
+
+            if total_dur <= self.max_duration_sec:
+                self.logger.info("Script fits in a single part — no split needed")
+                return [
+                    self._build_part(
+                        script_text=script,
+                        part_number=1,
+                        total_parts=1,
+                    )
+                ]
+
+            # Determine how many parts we need
+            num_parts = max(2, int(total_dur // self.max_duration_sec) + 1)
+            self.logger.info(f"Script requires splitting into ~{num_parts} parts")
+
+            # Split into sentences
+            sentences = self._split_sentences(monologue_text)
+            if len(sentences) < num_parts:
+                self.logger.warning(
+                    f"Only {len(sentences)} sentence(s) — cannot split into "
+                    f"{num_parts} parts, returning single part"
+                )
+                return [
+                    self._build_part(
+                        script_text=script,
+                        part_number=1,
+                        total_parts=1,
+                    )
+                ]
+
+            # Distribute sentences across parts
+            parts_text = self._distribute_sentences(sentences, num_parts)
+
+            # Build output dicts
+            result: List[Dict[str, Any]] = []
+            total_parts = len(parts_text)
+            for idx, part_txt in enumerate(parts_text, start=1):
+                part_script = json.dumps({
+                    "caption": parsed_dict.get("caption", ""),
+                    "pinned_comment": parsed_dict.get("pinned_comment", ""),
+                    "script": part_txt
+                })
+                result.append(
+                    self._build_part(
+                        script_text=part_script,
+                        part_number=idx,
+                        total_parts=total_parts,
+                    )
+                )
+
+            # Validate no part is too short
+            result = self._enforce_min_duration(result)
+
+            for p in result:
+                self.logger.info(
+                    f"  Part {p['part_number']}/{p['total_parts']} — "
+                    f"{format_duration(p['estimated_duration'])} "
+                    f"(Monologue JSON, {len(json.loads(p['script_text'])['script'].split())} words)"
+                )
+
+            return result
+
+        # Fallback to standard raw text splitting
         total_dur = estimate_duration_sec(script, self.wpm)
         self.logger.info(
             f"SmartSplitter: estimated duration {format_duration(total_dur)} "
@@ -247,7 +399,19 @@ class SmartSplitter:
         total_parts: int,
     ) -> Dict[str, Any]:
         """Build a single part dictionary."""
-        est_dur = estimate_duration_sec(script_text, self.wpm)
+        import json
+        is_json = False
+        try:
+            parsed = json.loads(script_text)
+            if isinstance(parsed, list):
+                is_json = True
+                est_dur = sum(estimate_duration_sec(block["text"], self.wpm) for block in parsed)
+        except Exception:
+            pass
+
+        if not is_json:
+            est_dur = estimate_duration_sec(script_text, self.wpm)
+
         watermark = (
             self._make_watermark_config(part_number, total_parts)
             if total_parts > 1
