@@ -34,20 +34,23 @@ jobs:
           playwright install chromium
           playwright install-deps
 
+      - name: Cache Kokoro Model Assets
+        uses: actions/cache@v4
+        with:
+          path: assets/kokoro
+          key: kokoro-assets-v0.19
+
       - name: Ensure Kokoro Assets
         run: |
           mkdir -p assets/kokoro
-          python -c "
-          import urllib.request, os
-          m_path = 'assets/kokoro/kokoro-v0_19.onnx'
-          v_path = 'assets/kokoro/voices.bin'
-          if not os.path.exists(m_path):
-              print('Downloading Kokoro ONNX model...')
-              urllib.request.urlretrieve('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx', m_path)
-          if not os.path.exists(v_path):
-              print('Downloading Kokoro voices bin...')
-              urllib.request.urlretrieve('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin', v_path)
-          "
+          if [ ! -f "assets/kokoro/kokoro-v0_19.onnx" ]; then
+            echo "Downloading Kokoro ONNX model..."
+            curl -sSL -H "User-Agent: Mozilla/5.0" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/kokoro-v0_19.onnx" -o "assets/kokoro/kokoro-v0_19.onnx"
+          fi
+          if [ ! -f "assets/kokoro/voices.bin" ]; then
+            echo "Downloading Kokoro voices bin..."
+            curl -sSL -H "User-Agent: Mozilla/5.0" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin" -o "assets/kokoro/voices.bin"
+          fi
 
       - name: Run Bot Auto-Post Pipeline
         env:
