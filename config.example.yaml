@@ -179,7 +179,21 @@ video:
   # Gameplay background sources (yt-dlp URLs or local paths)
   gameplay_sources:
     - url: "https://youtu.be/s600FYgI5-s?si=VH1KY-p5GMVejos9"
-      label: "gameplay_video"
+      label: "gameplay_video_1"
+    - url: "https://youtube.com/shorts/qs9cf7_mZow"
+      label: "gameplay_video_2"
+    - url: "https://youtube.com/shorts/kzxetZaAEBA"
+      label: "gameplay_video_3"
+    - url: "https://youtube.com/shorts/edSgtjKyFd4"
+      label: "gameplay_video_4"
+    - url: "https://youtube.com/shorts/v7cMEdbNTYI"
+      label: "gameplay_video_5"
+    - url: "https://youtube.com/shorts/9wdcl85SvvU"
+      label: "gameplay_video_6"
+    - url: "https://youtube.com/shorts/1vCccIcUsTw"
+      label: "gameplay_video_7"
+    - url: "https://youtube.com/shorts/I6DaR7Z2F4I"
+      label: "gameplay_video_8"
     # Add local files by placing them in assets/gameplay/
   gameplay_dir: "assets/gameplay"
 
