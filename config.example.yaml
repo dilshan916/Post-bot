@@ -227,7 +227,7 @@ pipeline:
   log_level: "INFO" # DEBUG | INFO | WARNING | ERROR
   scraped_history: "data/scraped_history.json"
   keep_temp_files: false # Set true for debugging
-  approve_scripts: true # Require manual approval of rewritten scripts in CMD
+  approve_scripts: false # Set false for 100% automated execution (no manual approval)
   audio_ducking: true # Dynamically adjust background music volume around speaker pauses
   pipeline_mode: "conversational" # Default mode: monologue | conversational
   outro_enabled: true # Append a "Follow for more" audio/visual block at the end of the video

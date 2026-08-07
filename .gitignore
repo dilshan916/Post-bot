@@ -25,8 +25,8 @@ temp/
 output/*.mp4
 output/logs/
 
-# Data (history has sensitive post IDs)
-data/scraped_history.json
+# Data
+# data/scraped_history.json (tracked for CI/CD history persistence)
 
 # Assets (large binary files)
 assets/gameplay/*

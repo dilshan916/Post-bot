@@ -2108,6 +2108,8 @@ def main() -> int:
 
     # Inject the chosen pipeline mode globally into config
     config["pipeline"]["pipeline_mode"] = pipeline_mode
+    if args.mode:
+        config["pipeline"]["approve_scripts"] = False
 
     # Layer settings from config based on mode
     mode_cfg = config.get(pipeline_mode, {})
