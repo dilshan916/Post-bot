@@ -179,20 +179,36 @@ class SubtitleRenderer:
             A PIL font object.
         """
         from PIL import ImageFont  # type: ignore[import-untyped]
+        from pathlib import Path
 
         if os.path.isfile(font_ref):
             try:
                 return ImageFont.truetype(font_ref, font_size)
             except (OSError, IOError) as exc:
                 self.logger.warning(
-                    "Could not load font file '%s': %s. "
-                    "Falling back to default.",
+                    "Could not load font file '%s': %s. Falling back to default.",
                     font_ref,
                     exc,
                 )
                 return ImageFont.load_default()
 
-        # Try standard loading
+        # Try searching project assets/fonts directory
+        project_root = Path(__file__).resolve().parent.parent
+        asset_fonts = [
+            project_root / "assets" / "fonts" / f"{font_ref}.ttf",
+            project_root / "assets" / "fonts" / f"{font_ref.replace(' ', '')}.ttf",
+            project_root / "assets" / "fonts" / "ArialBlack.ttf",
+            project_root / "assets" / "fonts" / "ArialBold.ttf",
+            project_root / "assets" / "fonts" / "Impact.ttf",
+        ]
+        for font_path in asset_fonts:
+            if font_path.exists():
+                try:
+                    return ImageFont.truetype(str(font_path), font_size)
+                except (OSError, IOError):
+                    pass
+
+        # Try standard system loading
         try:
             return ImageFont.truetype(font_ref, font_size)
         except (OSError, IOError):

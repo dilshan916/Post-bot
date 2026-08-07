@@ -620,8 +620,13 @@ class VideoCompositor:
         frame_w, frame_h = frame_size
 
         # Resolve font
+        from pathlib import Path
+        font_file = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "ArialBold.ttf"
         try:
-            pil_font = ImageFont.truetype("arial.ttf", font_size)
+            if font_file.exists():
+                pil_font = ImageFont.truetype(str(font_file), font_size)
+            else:
+                pil_font = ImageFont.truetype("arial.ttf", font_size)
         except Exception:
             pil_font = ImageFont.load_default()
 
