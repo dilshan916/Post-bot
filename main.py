@@ -34,7 +34,7 @@ import shutil
 import sys
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from colorama import Fore, Style
 
 # ---------------------------------------------------------------------------
@@ -103,6 +103,85 @@ def generate_countdown_sfx(duration_sec: float = 3.0) -> Any:
     # Overlay pop at end of countdown
     segment = segment.overlay(pop, position=int(duration_sec * 1000) - 150)
     return segment
+
+
+def generate_reel_caption_and_comment(
+    story: Dict[str, Any],
+    pipeline_mode: str,
+    config: Dict[str, Any],
+    part_script_text: Optional[str] = None
+) -> Tuple[str, Optional[str]]:
+    """Generate high-engagement, story-specific Facebook Reel caption and first comment."""
+    title = str(story.get("title", "")).strip()
+    subreddit = str(story.get("subreddit", "RedditStories")).strip()
+    if subreddit.lower().startswith("r/"):
+        subreddit = subreddit[2:]
+    
+    caption = ""
+    comment = ""
+
+    # 1. Try parsing JSON script blocks (for riddle mode or structured LLM rewrites)
+    if part_script_text:
+        try:
+            import json
+            parsed = json.loads(part_script_text)
+            if isinstance(parsed, dict):
+                caption = parsed.get("caption", "").strip()
+                comment = parsed.get("pinned_comment", "").strip()
+        except Exception:
+            pass
+
+    # 2. If caption is still empty or is generic fallback, build story-specific dynamic caption
+    fb_cfg = config.get("facebook", {})
+    if not caption or "solve this famous riddle" in caption.lower():
+        if pipeline_mode == "monologue":
+            custom_template = fb_cfg.get("monologue_caption")
+            if custom_template:
+                try:
+                    caption = custom_template.format(title=title, subreddit=subreddit)
+                except Exception:
+                    caption = custom_template
+            elif title:
+                caption = f"{title} 📖🤐 What would you do? Drop your thoughts below!\n\n#storytime #redditstories #reddit #truestory #{subreddit.lower()} #drama"
+            else:
+                caption = f"Wild Reddit story you won't believe! 📖🤐 What are your thoughts?\n\n#storytime #redditstories #reddit #{subreddit.lower()} #truestory"
+            
+            if not comment:
+                comment = "What would you do if you were in this situation? Let me know your honest thoughts below! 👇"
+
+        elif pipeline_mode == "conversational":
+            custom_template = fb_cfg.get("conversational_caption")
+            if custom_template:
+                try:
+                    caption = custom_template.format(title=title, subreddit=subreddit)
+                except Exception:
+                    caption = custom_template
+            elif title:
+                caption = f"{title} 🎭🔥 What would you do in this situation? Drop a comment below!\n\n#storytime #relationship #drama #redditstories #reddit"
+            else:
+                caption = f"Insane drama you have to hear! 🎭🔥 Who was in the wrong here?\n\n#storytime #relationship #drama #redditstories"
+            
+            if not comment:
+                comment = "Who do you think was right here? Lock your verdict below! 👇"
+
+        elif pipeline_mode == "riddle":
+            custom_template = fb_cfg.get("riddle_caption")
+            if custom_template:
+                caption = custom_template
+            elif title and "compilation" not in title.lower():
+                caption = f"{title} 🧠💡 Can you solve it before the timer ends?\n\n#riddle #brainteaser #mindgames #puzzle #riddles"
+            else:
+                caption = f"Can you solve this riddle? 🧠💡 Comment your answer below!\n\n#riddle #brainteaser #mindgames #puzzle #riddles"
+            
+            if not comment:
+                comment = "Lock your answer in the comments before checking! 🧠👇"
+        else:
+            if title:
+                caption = f"{title} 📖🔥 What are your thoughts?\n\n#storytime #redditstories #reddit #{subreddit.lower()}"
+            else:
+                caption = fb_cfg.get("caption", "Incredible story! What do you think? 💬👇 #redditstories #storytime")
+
+    return caption, comment
 
 
 # ===================================================================
@@ -664,18 +743,13 @@ class RedditDailyBot:
                                 self.logger.warning(f"Failed to render video for story {story.get('id')}.")
                                 continue
 
-                            # Extract caption
-                            caption_to_use = ""
-                            try:
-                                import json
-                                blocks = json.loads(part["script_text"])
-                                if isinstance(blocks, dict):
-                                    caption_to_use = blocks.get("caption", "").strip()
-                            except Exception:
-                                pass
-
-                            if not caption_to_use:
-                                caption_to_use = self.config.get("facebook", {}).get("caption", "")
+                            # Generate dynamic caption and comment
+                            caption_to_use, comment_to_use = generate_reel_caption_and_comment(
+                                story=story,
+                                pipeline_mode=mode_name,
+                                config=self.config,
+                                part_script_text=part.get("script_text")
+                            )
 
                             # Calculate next SLT schedule timestamp
                             schedule_time = self.get_next_schedule_time(mode_name)
@@ -993,20 +1067,12 @@ class RedditDailyBot:
                 # Auto-post to Facebook Reels if enabled and mode is monologue/riddle/conversational
                 fb_cfg = self.config.get("facebook", {})
                 if pipeline_mode in ("monologue", "riddle", "conversational") and fb_cfg.get("enabled", False) and path:
-                    caption_to_use = reel_caption
-                    comment_to_use = reel_pinned_comment
-                    if not caption_to_use:
-                        try:
-                            import json
-                            blocks = json.loads(part["script_text"])
-                            if isinstance(blocks, dict):
-                                caption_to_use = blocks.get("caption", "").strip()
-                                comment_to_use = blocks.get("pinned_comment", "").strip()
-                        except Exception:
-                            pass
-                    
-                    if not caption_to_use:
-                        caption_to_use = fb_cfg.get("caption", "")
+                    caption_to_use, comment_to_use = generate_reel_caption_and_comment(
+                        story=story,
+                        pipeline_mode=pipeline_mode,
+                        config=self.config,
+                        part_script_text=part.get("script_text")
+                    )
                         
                     print("\n" + Fore.GREEN + Style.BRIGHT + "============================================================")
                     print(Fore.GREEN + Style.BRIGHT + f"  Video rendered successfully: {path.name}")

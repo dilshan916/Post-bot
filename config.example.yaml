@@ -393,5 +393,8 @@ facebook:
   conversational_page_access_token: "YOUR_CONVERSATIONAL_PAGE_ACCESS_TOKEN_HERE"
   monologue_page_id: "YOUR_MONOLOGUE_FACEBOOK_PAGE_ID_HERE"
   monologue_page_access_token: "YOUR_MONOLOGUE_PAGE_ACCESS_TOKEN_HERE"
-  caption: "Can you solve this famous riddle? Comment your answer below! 🧠🔥 #riddle #brainteaser #mindgames #viral"
+  caption: "{title} 📖🤐 What are your thoughts on this? Drop a comment below!\n\n#storytime #redditstories #reddit #truestory #drama"
+  monologue_caption: "{title} 📖🤐 What are your thoughts on this? Drop a comment below!\n\n#storytime #redditstories #reddit #truestory #drama"
+  conversational_caption: "{title} 🎭🔥 What would you do in this situation? Let us know below!\n\n#storytime #relationship #drama #redditstories #truestory"
+  riddle_caption: "Can you solve this riddle? 🧠💡 Lock your answer in the comments below!\n\n#riddle #brainteaser #mindgames #puzzle #riddles"
 
