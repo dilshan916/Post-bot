@@ -49,21 +49,19 @@ def main():
     if json_candidates:
         chosen_json = json_candidates[0]
         print(Fore.GREEN + f"✓ Found downloaded OAuth client file: {chosen_json}")
-        use_file = input(Fore.YELLOW + "Use this JSON file? (y/n, default y): ").strip().lower()
-        if use_file != "n":
-            try:
-                with open(chosen_json, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if "installed" in data:
-                        client_id = data["installed"].get("client_id", "")
-                        client_secret = data["installed"].get("client_secret", "")
-                        client_config = data
-                    elif "web" in data:
-                        client_id = data["web"].get("client_id", "")
-                        client_secret = data["web"].get("client_secret", "")
-                        client_config = data
-            except Exception as e:
-                print(Fore.RED + f"Failed to read JSON: {e}")
+        try:
+            with open(chosen_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if "installed" in data:
+                    client_id = data["installed"].get("client_id", "")
+                    client_secret = data["installed"].get("client_secret", "")
+                    client_config = data
+                elif "web" in data:
+                    client_id = data["web"].get("client_id", "")
+                    client_secret = data["web"].get("client_secret", "")
+                    client_config = data
+        except Exception as e:
+            print(Fore.RED + f"Failed to read JSON: {e}")
 
     if not client_config or not client_id or not client_secret:
         print(Fore.YELLOW + "Please paste your OAuth Client details from Google Cloud:")

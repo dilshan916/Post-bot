@@ -32,6 +32,8 @@ output/logs/
 assets/gameplay/*
 !assets/gameplay/.gitkeep
 !assets/gameplay/default_gameplay.mp4
+!assets/gameplay/gameplay_2.mp4
+!assets/gameplay/gameplay_3.mp4
 assets/vosk_model/
 
 # Config & Credentials (contains API keys)
