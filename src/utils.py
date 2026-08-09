@@ -155,26 +155,40 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
         groq_key = os.environ["GROQ_API_KEY"].strip()
         if groq_key:
             cfg.setdefault("groq", {})["api_key"] = groq_key
+    # Mode-specific Facebook secret overrides
+    fb_cfg = cfg.setdefault("facebook", {})
+    if "FACEBOOK_CONVERSATIONAL_PAGE_ACCESS_TOKEN" in os.environ:
+        c_token = os.environ["FACEBOOK_CONVERSATIONAL_PAGE_ACCESS_TOKEN"].strip()
+        if c_token:
+            fb_cfg["enabled"] = True
+            fb_cfg["conversational_page_access_token"] = c_token
+            if "FACEBOOK_CONVERSATIONAL_PAGE_ID" in os.environ and os.environ["FACEBOOK_CONVERSATIONAL_PAGE_ID"].strip():
+                fb_cfg["conversational_page_id"] = os.environ["FACEBOOK_CONVERSATIONAL_PAGE_ID"].strip()
+
+    if "FACEBOOK_MONOLOGUE_PAGE_ACCESS_TOKEN" in os.environ:
+        m_token = os.environ["FACEBOOK_MONOLOGUE_PAGE_ACCESS_TOKEN"].strip()
+        if m_token:
+            fb_cfg["enabled"] = True
+            fb_cfg["monologue_page_access_token"] = m_token
+            if "FACEBOOK_MONOLOGUE_PAGE_ID" in os.environ and os.environ["FACEBOOK_MONOLOGUE_PAGE_ID"].strip():
+                fb_cfg["monologue_page_id"] = os.environ["FACEBOOK_MONOLOGUE_PAGE_ID"].strip()
+
     if "FACEBOOK_PAGE_ACCESS_TOKEN" in os.environ:
         fb_token = os.environ["FACEBOOK_PAGE_ACCESS_TOKEN"].strip()
         if fb_token:
-            fb_cfg = cfg.setdefault("facebook", {})
             fb_cfg["enabled"] = True
             fb_cfg["page_access_token"] = fb_token
-            fb_cfg["monologue_page_access_token"] = fb_token
-            fb_cfg["conversational_page_access_token"] = fb_token
+            if "monologue_page_access_token" not in fb_cfg:
+                fb_cfg["monologue_page_access_token"] = fb_token
+            if "conversational_page_access_token" not in fb_cfg:
+                fb_cfg["conversational_page_access_token"] = fb_token
             if "FACEBOOK_PAGE_ID" in os.environ and os.environ["FACEBOOK_PAGE_ID"].strip():
                 page_id_val = os.environ["FACEBOOK_PAGE_ID"].strip()
                 fb_cfg["page_id"] = page_id_val
-                fb_cfg["monologue_page_id"] = page_id_val
-                fb_cfg["conversational_page_id"] = page_id_val
-            pages = fb_cfg.get("pages", [])
-            if pages and isinstance(pages, list):
-                for p in pages:
-                    if isinstance(p, dict):
-                        p["access_token"] = fb_token
-                        if "FACEBOOK_PAGE_ID" in os.environ and os.environ["FACEBOOK_PAGE_ID"].strip():
-                            p["page_id"] = os.environ["FACEBOOK_PAGE_ID"].strip()
+                if "monologue_page_id" not in fb_cfg:
+                    fb_cfg["monologue_page_id"] = page_id_val
+                if "conversational_page_id" not in fb_cfg:
+                    fb_cfg["conversational_page_id"] = page_id_val
 
     return cfg
 

@@ -1,13 +1,13 @@
-name: 2x Daily Monologue Reel Publisher
+name: 2x Daily Conversational Reel Publisher
 
 on:
   schedule:
-    # Runs twice daily at 06:00 UTC (11:30 AM IST) and 18:00 UTC (11:30 PM IST)
-    - cron: '0 6,18 * * *'
+    # Runs twice daily at 08:00 UTC (1:30 PM IST) and 20:00 UTC (1:30 AM IST)
+    - cron: '0 8,20 * * *'
   workflow_dispatch: # Allows manual trigger from GitHub UI anytime
 
 jobs:
-  auto_post:
+  auto_post_conversational:
     runs-on: ubuntu-latest
 
     steps:
@@ -52,14 +52,14 @@ jobs:
             curl -sSL -H "User-Agent: Mozilla/5.0" "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin" -o "assets/kokoro/voices.bin"
           fi
 
-      - name: Run Bot Auto-Post Pipeline
+      - name: Run Bot Auto-Post Pipeline (Conversational Mode)
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_CONVERSATIONAL_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_CONVERSATIONAL_PAGE_ACCESS_TOKEN || secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          FACEBOOK_CONVERSATIONAL_PAGE_ID: ${{ secrets.FACEBOOK_CONVERSATIONAL_PAGE_ID || secrets.FACEBOOK_PAGE_ID }}
         run: |
-          python main.py --mode monologue --batch 1
+          python main.py --mode conversational --batch 1
 
       - name: Commit Scraped History
         run: |
