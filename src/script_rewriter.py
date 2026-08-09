@@ -183,20 +183,48 @@ class ScriptRewriter:
             level=config.get("pipeline", {}).get("log_level", "INFO"),
         )
 
+        import os
+
+        def _clean_key(k: Any) -> str:
+            s = str(k or "").strip()
+            if not s or s.startswith("YOUR_") or s.endswith("_HERE"):
+                return ""
+            return s
+
         groq_cfg = config.get("groq", {})
-        self._groq_api_key: str = groq_cfg.get("api_key", "").strip()
-        self._groq_api_keys: list = groq_cfg.get("api_keys", [])
-        if not self._groq_api_keys and self._groq_api_key:
-            self._groq_api_keys = [self._groq_api_key]
-        self._groq_key: str = self._groq_api_keys[0] if self._groq_api_keys else ""
-        self._groq_model: str = groq_cfg.get("model", "llama-3.1-70b-versatile").strip()
-        self._use_groq: bool = bool(self._groq_api_keys and any(k and "YOUR_" not in k for k in self._groq_api_keys))
+        env_groq = _clean_key(os.environ.get("GROQ_API_KEY", ""))
+        raw_groq_key = _clean_key(groq_cfg.get("api_key", ""))
+        raw_groq_keys = [_clean_key(k) for k in groq_cfg.get("api_keys", []) if _clean_key(k)]
+
+        if env_groq:
+            self._groq_api_keys = [env_groq]
+        elif raw_groq_keys:
+            self._groq_api_keys = raw_groq_keys
+        elif raw_groq_key:
+            self._groq_api_keys = [raw_groq_key]
+        else:
+            self._groq_api_keys = []
+
+        self._groq_api_key: str = self._groq_api_keys[0] if self._groq_api_keys else ""
+        self._groq_key: str = self._groq_api_key
+        self._groq_model: str = groq_cfg.get("model", "llama-3.3-70b-versatile").strip()
+        self._use_groq: bool = bool(self._groq_api_keys)
 
         llm_cfg = config.get("llm", {})
-        self._gemini_api_key: str = llm_cfg.get("api_key", "").strip()
-        self._gemini_api_keys: list = llm_cfg.get("api_keys", [])
-        if not self._gemini_api_keys and self._gemini_api_key:
-            self._gemini_api_keys = [self._gemini_api_key]
+        env_gemini = _clean_key(os.environ.get("GEMINI_API_KEY", ""))
+        raw_gem_key = _clean_key(llm_cfg.get("api_key", ""))
+        raw_gem_keys = [_clean_key(k) for k in llm_cfg.get("api_keys", []) if _clean_key(k)]
+
+        if env_gemini:
+            self._gemini_api_keys = [env_gemini]
+        elif raw_gem_keys:
+            self._gemini_api_keys = raw_gem_keys
+        elif raw_gem_key:
+            self._gemini_api_keys = [raw_gem_key]
+        else:
+            self._gemini_api_keys = []
+
+        self._gemini_api_key: str = self._gemini_api_keys[0] if self._gemini_api_keys else ""
         self._gemini_model: str = llm_cfg.get("model", "gemini-2.5-flash").strip()
 
         if self._use_groq or self._gemini_api_keys:
@@ -742,12 +770,37 @@ class ScriptRewriter:
                                 sleep_time,
                             )
                         time.sleep(sleep_time)
-                    else:
-                        self.log.error(
-                            "Groq API call failed after %d retries: %s. Falling back to regex pipeline.",
-                            max_retries,
-                            exc,
-                        )
+        # If Groq failed or is not available, try Gemini fallback for conversational mode
+        pipeline_mode = self.cfg.get("pipeline", {}).get("pipeline_mode", "monologue")
+        if pipeline_mode == "conversational" and self._gemini_api_keys:
+            self.log.info("Attempting Conversational script rewriting with Gemini fallback...")
+            system_prompt = self.cfg.get("conversational", {}).get("system_prompt")
+            user_content = f"Reddit post text:\n{raw}"
+            if feedback:
+                user_content += f"\n\nAdditional feedback instructions for rewriting: {feedback}"
+            for attempt, key in enumerate(self._gemini_api_keys):
+                try:
+                    from google import genai
+                    client = genai.Client(api_key=key)
+                    response = client.models.generate_content(
+                        model=self._gemini_model,
+                        contents=f"{system_prompt}\n\n{user_content}"
+                    )
+                    g_text = (response.text or "").strip()
+                    if g_text.startswith("```"):
+                        g_text = re.sub(r"^```(?:json)?\n?", "", g_text, flags=re.IGNORECASE)
+                        g_text = re.sub(r"\n?```$", "", g_text)
+                    g_text = g_text.strip()
+                    match_json = re.search(r"\{.*\}", g_text, re.DOTALL)
+                    if match_json:
+                        g_text = match_json.group(0)
+                    import json
+                    parsed = json.loads(g_text)
+                    if isinstance(parsed, dict) and "script" in parsed:
+                        self.log.info("Gemini Conversational Rewrite complete — %d chars → %d chars", len(raw), len(g_text))
+                        return json.dumps(parsed)
+                except Exception as g_exc:
+                    self.log.warning("Gemini Conversational fallback attempt %d failed: %s", attempt + 1, g_exc)
 
         # Fallback to local regex cleanup pipeline
         self.log.info("Running regex cleanup pipeline")

@@ -155,6 +155,7 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
         groq_key = os.environ["GROQ_API_KEY"].strip()
         if groq_key:
             cfg.setdefault("groq", {})["api_key"] = groq_key
+            cfg.setdefault("groq", {})["api_keys"] = [groq_key]
     # Mode-specific Facebook secret overrides
     fb_cfg = cfg.setdefault("facebook", {})
     if "FACEBOOK_CONVERSATIONAL_PAGE_ACCESS_TOKEN" in os.environ:
