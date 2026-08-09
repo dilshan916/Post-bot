@@ -425,3 +425,15 @@ facebook:
   conversational_caption: "{title} 🎭🔥 What would you do in this situation? Let us know below!\n\n#storytime #relationship #drama #redditstories #truestory"
   riddle_caption: "Can you solve this riddle? 🧠💡 Lock your answer in the comments below!\n\n#riddle #brainteaser #mindgames #puzzle #riddles"
 
+# ----------------------------------------------------------
+# YouTube Shorts Publishing
+# ----------------------------------------------------------
+youtube:
+  enabled: true
+  privacy_status: "public" # public | unlisted | private
+  category_id: "24" # 24 = Entertainment
+  client_id: "YOUR_YOUTUBE_CLIENT_ID_HERE"
+  client_secret: "YOUR_YOUTUBE_CLIENT_SECRET_HERE"
+  refresh_token: "YOUR_YOUTUBE_REFRESH_TOKEN_HERE"
+
+
