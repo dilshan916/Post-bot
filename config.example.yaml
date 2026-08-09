@@ -221,7 +221,7 @@ video:
 # Pipeline Settings
 # ----------------------------------------------------------
 pipeline:
-  batch_size: 3 # Stories per run (override with --batch N)
+  batch_size: 1 # Stories per run (override with --batch N)
   temp_dir: "temp" # Temp working directory
   log_dir: "output/logs"
   log_level: "INFO" # DEBUG | INFO | WARNING | ERROR
