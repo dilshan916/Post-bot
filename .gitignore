@@ -34,8 +34,10 @@ assets/gameplay/*
 !assets/gameplay/default_gameplay.mp4
 assets/vosk_model/
 
-# Config (contains API keys)
+# Config & Credentials (contains API keys)
 config.yaml
+youtube_credentials.json
+client_secret*.json
 
 # OS
 Thumbs.db

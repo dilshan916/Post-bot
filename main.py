@@ -1098,6 +1098,21 @@ class RedditDailyBot:
                             self.logger.info("Facebook Reel successfully published!")
                         else:
                             self.logger.warning("Facebook Reel publishing failed.")
+
+                        # Auto-post to YouTube Shorts if enabled or YOUTUBE credentials present
+                        try:
+                            from src.youtube_publisher import YouTubeShortsPublisher
+                            yt_publisher = YouTubeShortsPublisher(self.config, self.logger)
+                            if yt_publisher.enabled:
+                                self.logger.info(Fore.RED + Style.BRIGHT + "  PUBLISHING TO YOUTUBE SHORTS...")
+                                yt_title = story.get("title", "Reddit Story")
+                                yt_publisher.upload_short(
+                                    video_path=path,
+                                    title=yt_title,
+                                    description=caption_to_use,
+                                )
+                        except Exception as yt_err:
+                            self.logger.warning(f"YouTube Shorts upload encountered an error: {yt_err}")
                     else:
                         self.logger.info(Fore.YELLOW + "  Post skipped. Video saved only in the output folder.")
             except Exception as exc:
