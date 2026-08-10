@@ -114,26 +114,15 @@ class YouTubeShortsPublisher:
 
             youtube = build("youtube", "v3", credentials=creds)
 
-            # Ensure title contains #Shorts and is under 100 characters
-            clean_title = title.strip()
-            if "#Shorts" not in clean_title and "#shorts" not in clean_title:
-                clean_title = f"{clean_title} #Shorts"
-            if len(clean_title) > 100:
-                clean_title = clean_title[:92].strip() + "… #Shorts"
-
-            # Prepare description
-            clean_desc = description.strip()
-            if not clean_desc:
-                clean_desc = f"{clean_title}\n\n#Shorts #storytime #redditstories #reddit #truestory"
-            elif "#Shorts" not in clean_desc and "#shorts" not in clean_desc:
-                clean_desc = f"{clean_desc}\n\n#Shorts #storytime #redditstories #reddit"
+            # Strict YouTube API sanitization (No < or >, no newlines in title, max 100 chars)
+            clean_title = self._sanitize_title(title)
+            clean_desc = self._sanitize_description(description or clean_title)
 
             # Default tags
             default_tags = ["shorts", "reddit", "storytime", "redditstories", "truestory", "drama"]
-            if tags:
-                all_tags = list(set(tags + default_tags))
-            else:
-                all_tags = default_tags
+            all_tags = self._sanitize_tags((tags or []) + default_tags)
+
+            self.logger.info(f"  YouTube Title: '{clean_title}' ({len(clean_title)} chars)")
 
             body = {
                 "snippet": {
@@ -182,3 +171,48 @@ class YouTubeShortsPublisher:
         except Exception as exc:
             self.logger.error(f"YouTube Shorts upload failed: {exc}")
             return None
+
+    @staticmethod
+    def _sanitize_title(title: str) -> str:
+        """Sanitize video title strictly for YouTube Data API v3 compliance."""
+        import re
+        s = str(title or "").replace("<", "(").replace(">", ")")
+        s = re.sub(r"[\r\n\t]+", " ", s)
+        s = "".join(ch for ch in s if ch.isprintable() or ch == " ")
+        s = re.sub(r"\s+", " ", s).strip()
+        if not s:
+            s = "Crazy Reddit Story"
+        if "#Shorts" not in s and "#shorts" not in s:
+            if len(s) > 88:
+                s = s[:85].strip() + "..."
+            s = f"{s} #Shorts"
+        else:
+            if len(s) > 100:
+                s = s[:93].strip() + "... #Shorts"
+        return s[:100].strip()
+
+    @staticmethod
+    def _sanitize_description(desc: str) -> str:
+        """Sanitize video description for YouTube Data API v3 compliance."""
+        import re
+        s = str(desc or "").replace("<", "(").replace(">", ")")
+        s = "".join(ch for ch in s if ch.isprintable() or ch in ("\n", "\r", "\t"))
+        s = s.strip()
+        if not s:
+            s = "Check out this Reddit story! #Shorts #storytime #redditstories"
+        elif "#Shorts" not in s and "#shorts" not in s:
+            s = f"{s}\n\n#Shorts #storytime #redditstories #reddit"
+        return s[:4900]
+
+    @staticmethod
+    def _sanitize_tags(tags: List[str]) -> List[str]:
+        """Sanitize tags for YouTube Data API v3 compliance."""
+        import re
+        clean_tags = []
+        for t in tags:
+            tag_str = str(t or "").replace("<", "").replace(">", "")
+            tag_str = re.sub(r"[\r\n\t]+", " ", tag_str).strip()
+            if tag_str and len(tag_str) <= 50 and tag_str not in clean_tags:
+                clean_tags.append(tag_str)
+        return clean_tags[:25]
+
