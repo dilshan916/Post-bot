@@ -308,7 +308,8 @@ conversational:
   chibi_female_background_path: "assets/backgrounds/home_female.png"
   system_prompt: |
     You are a dramatic script writer. Convert the following story into a strict structured dialogue format.
-    You must strictly output a single, well-formatted JSON object with absolutely nothing else. Do not include any markdown wrap around headers, intro, or outro text outside the JSON.
+
+    Output a single, well-formatted JSON object with absolutely nothing else.
 
     JSON STRUCTURE REQUIRED:
     {
@@ -317,31 +318,42 @@ conversational:
       "script": [
         {"speaker": "MALE", "emotion": "angry", "text": "Sentence spoken by adult male character..."},
         {"speaker": "FEMALE", "emotion": "worried", "text": "Sentence spoken by adult female character..."},
-        {"speaker": "OLD_MALE", "emotion": "sad", "text": "Sentence spoken by older male character (e.g., father, grandfather, elder boss)..."},
-        {"speaker": "OLD_FEMALE", "emotion": "neutral", "text": "Sentence spoken by older female character (e.g., mother, grandmother, elder boss)..."},
-        {"speaker": "CHILD_MALE", "emotion": "crying", "text": "Sentence spoken by young/child male character..."},
-        {"speaker": "CHILD_FEMALE", "emotion": "happy", "text": "Sentence spoken by young/child female character..."}
+        {"speaker": "OLD_MALE", "emotion": "sad", "text": "Sentence spoken by older male character..."},
+        {"speaker": "OLD_FEMALE", "emotion": "neutral", "text": "Sentence spoken by older female character..."},
+        {"speaker": "CHILD_MALE", "emotion": "crying", "text": "Sentence spoken by child male character..."},
+        {"speaker": "CHILD_FEMALE", "emotion": "happy", "text": "Sentence spoken by child female character..."}
       ]
     }
 
     Rules:
-    1. Split the narrative into a sequence of conversational turns.
-    2. CRITICAL: The dialogue turns must strictly alternate between speaker roles. Under no circumstances should the same speaker have two turns in a row — including at the end of the script. If the protagonist needs an emotional build-up before their final question, give the other character a short dismissive or escalating response in between (e.g. "I don't want to hear it!" or "You're being ridiculous!"). Never stack multiple protagonist blocks to reach the ending.
-    3. CRITICAL: Double-check role and age attribution. Use MALE/FEMALE for adult characters, OLD_MALE/OLD_FEMALE for older adult/elderly characters, and CHILD_MALE/CHILD_FEMALE for children or younger characters.
-    4. CRITICAL: Analyze the emotional context, tone, and subtext of each spoken line. Assign one of these 15 exact emotion strings to the "emotion" field — use ONLY these values, any other string will crash the pipeline: neutral, happy, angry, crying, surprised, thinking, explaining, worried, sighing, thumbsup, talking, waving, stressed, lovestruck, sleeping. Do NOT invent emotions like "accusing", "hurt", "questioning", "defensive", etc. Map them to the closest valid emotion instead (e.g. "accusing" → "angry", "hurt" → "crying", "questioning" → "thinking", "defensive" → "explaining"). Label the true feeling of the character (e.g. if they say "I'm fine!" but are clearly upset, label it "crying" or "worried").
-    5. Make it dramatic, engaging, and flow naturally like a text message drama or conversation.
-    6. Ensure all dialogue text blocks end with appropriate sentence punctuation (?, !, or .) so the TTS engine pauses naturally.
-    7. STRUCTURAL HOOK: The first dialogue block must hit like a slap — state the most extreme, emotionally charged moment of the conflict. If a viewer reads ONLY this one line, they should be hooked enough to stop scrolling. It must NOT be chronological backstory (e.g. "I had a pet who...", "One day X happened..."), explanatory setup (e.g. "I was told I'm in trouble for..."), or calm self-defense. Instead, open with the CONSEQUENCE or CONFLICT already exploding — the highest-stakes accusation, betrayal, or fallout. Backstory and how-we-got-here details must be delayed to blocks 2-4. Example: "My own mother screamed at me for feeding hungry children in her house!" NOT "I was told I'm in trouble for feeding the kids my mom babysits." No intro or explanation — the first block IS the hook.
-    8. Translate all text shorthand into full, natural spoken-word phrases (e.g., convert "AITA" to "Am I the jerk", "ex" to "ex-partner", "MIL" to "mother-in-law").
-    9. CRITICAL CLIFFHANGER ENDING: Never resolve the conflict, give a clean wrap-up, or have the characters agree or state "you're not the jerk" at the end. Instead, end the conversation abruptly on a high-tension argument, a dramatic realization, or an unresolved question. The second-to-last block MUST be from the opposing character — a short dismissive, accusatory, or escalating attack (e.g. "I'll never forgive you for this!" or "You're being completely selfish!") so the protagonist's final question is a direct emotional response to it. The final block of the script MUST be a direct-to-camera question spoken by the protagonist (the main character whose dilemma drives the story) — never a secondary/side character's reaction, confusion, or question. No dialogue may follow the protagonist's final question. The question must be short (under 15 words) and directly ask the audience to judge the protagonist's choice (e.g. "Was I really wrong for that?"). This leaves a cliffhanger that drives viewers to debate in the comments.
-    10. CAPTION AND HASHTAG HYGIENE: The caption field must be extremely brief (under 10 words) and end with exactly 5 hashtags. Avoid spammy tags like #viral, #trending. Instead, use 2 genre tags (e.g., #relationship, #storytime) and 3 specific contextual tags defining the story's subject (e.g., if the story is about a mother-in-law, use #relationshipadvice #drama #family).
-    11. UTIS COMPLIANCE COMMENT: The pinned_comment field must contain a unique, thought-provoking question derived organically from the story's conflict. It must stimulate a genuine interest-driven debate from the viewer (e.g. 'Who is in the wrong here? Drop your honest take below!').
-    12. CURIOSITY-GAP BEAT: Somewhere in the first half of the script, immediately before the story's pivotal decision or turning point is revealed, insert one standalone teaser line from the protagonist that hints a hard choice or twist is coming WITHOUT stating what it is. This line MUST reference a specific element from the story (a person, object, place, or action) — never a vague, generic statement like "Something's about to change" or "What I did next changed everything." Instead, anchor it to the story, e.g. for a food conflict: "What I did with that leftover spaghetti is something she'll never forgive." CRITICAL: NEVER reuse the same curiosity-gap phrasing across scripts.
-    13. DELAYED ESCALATION REVEAL: If the story contains a key statistic, cost, or escalating consequence (e.g. total money spent, time elapsed, severity of outcome), it must NOT appear early or be merged into the same sentence as another beat. It must appear as its own standalone short block, positioned in the final 2-3 blocks of the script, immediately before the final closing line.
-    14. LENGTH DISCIPLINE: Keep the script between 8-12 dialogue blocks total. Do not add repetitive back-and-forth arguing that restates a point already made. Every block must either reveal new information or escalate stakes — cut any block that doesn't.
-    15. Do NOT include markdown formatting like ```json or ```. Output ONLY the raw JSON string.
-    16. NO FABRICATION: Do not invent facts, numbers, costs, or subplots that are not present in the original story. If the story does not contain a key statistic for Rule 13, skip the delayed escalation reveal entirely rather than fabricating one.
-    17. FINAL SELF-CHECK: Before outputting, walk through every block in order and verify: (a) no speaker appears in two consecutive blocks — if they do, insert a short response from the other character between them or merge the consecutive blocks into one; (b) the last block is the protagonist's single unresolved question with no duplicate; (c) every number or fact in the script exists in the original story. If any check fails, rewrite the violating blocks before outputting.
+
+    1. CHARACTER MAPPING: Only use speaker roles (MALE, FEMALE, OLD_MALE, OLD_FEMALE, CHILD_MALE, CHILD_FEMALE) that correspond to actual people described in the source story. Map each real character to the closest-fitting sticker (age/gender). Do NOT invent characters to fill unused roles — a 2-person story should only use 2 speaker roles.
+
+    2. Split the story into 8-12 conversational turns, using only as many distinct speaker roles as the story actually supports.
+
+    3. The dialogue turns must strictly alternate between the speaker roles actually in use (never the same speaker twice in a row).
+
+    4. Assign one of these 15 exact emotion strings per line: neutral, happy, angry, crying, surprised, thinking, explaining, worried, sighing, thumbsup, talking, waving, stressed, lovestruck, sleeping. Choose emotions that genuinely fit the line's content — don't force an emotion that doesn't match just to add variety.
+
+    5. STRUCTURAL HOOK: The first block must open with the conflict or consequence already exploding.
+
+    6. Translate all shorthand into natural spoken phrases (e.g., "AITA" to "am I the jerk", "MIL" to "mother-in-law", "SO" to "partner", "OP" to "I/me"). Infer meaning from context for shorthand not listed here.
+
+    7. CURIOSITY-GAP BEAT: In the first half, insert one standalone teaser line unique to this story, hinting at a hard choice or discovery without revealing it. This must be resolved later — never left unaddressed.
+
+    8. DELAYED ESCALATION REVEAL: Position key statistics, costs, or consequences as a standalone line in the final 2-3 blocks, before the resolution.
+
+    9. CRITICAL RESOLUTION ENDING: The final block must deliver the true outcome from the source story — what actually happened, what was decided, or how it concluded. It must feel conclusive, not open-ended, and must NOT be a question.
+
+    10. NO INVENTED RESOLUTION: If the source story has no clear ending (unresolved thread, no update from OP), the final block should state this honestly rather than fabricating a resolution.
+
+    11. NO FABRICATION: Every fact, number, emotion, and character MUST exist in the original source story. Do not invent details, statistics, or people not present in the source.
+
+    12. CAPTION: Under 10 words + exactly 5 hashtags (2 genre-related, 3 context-related).
+
+    13. PINNED COMMENT: An organic, debate-sparking question tied to the story's conflict and its resolution.
+
+    14. Output ONLY the raw JSON string with no markdown formatting.
 
 # ----------------------------------------------------------
 # Thread Mode Config
