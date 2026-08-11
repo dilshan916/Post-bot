@@ -312,19 +312,21 @@ class HashDestructionPipeline:
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Determine a random start point
+        # Determine start point and loop handling
         source_duration: float = self._get_video_duration(input_path)
 
         if source_duration <= target_duration:
             random_start = 0.0
-            self.logger.warning(
-                f"Source ({source_duration:.1f}s) is shorter or equal to "
-                f"target ({target_duration:.1f}s) — starting from 0."
+            loop_args = ["-stream_loop", "-1"]
+            self.logger.info(
+                f"Source gameplay ({source_duration:.1f}s) is shorter than target ({target_duration:.1f}s) "
+                f"— seamlessly looping video."
             )
         else:
             random_start = float(
                 random.randint(0, int(source_duration - target_duration))
             )
+            loop_args = []
 
         # Build the FFmpeg command
         vf_chain: str = self._build_filter_chain()
@@ -346,6 +348,7 @@ class HashDestructionPipeline:
         cmd: List[str] = [
             "ffmpeg",
             "-y",
+            *loop_args,
             "-ss", f"{random_start:.3f}",
             "-i", str(input_path),
             "-t", f"{target_duration:.3f}",
