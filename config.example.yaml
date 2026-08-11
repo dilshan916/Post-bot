@@ -176,6 +176,10 @@ video:
   bitrate: "5000k" # Video bitrate (e.g. 5000k for high quality Reels)
   audio_bitrate: "192k" # Audio bitrate (e.g. 192k for high quality stereo audio)
 
+  # Dynamic Multi-Clip Video Stitching (cuts to different gameplay backgrounds every N seconds for max viewer retention)
+  multi_clip_stitching: true
+  clip_segment_duration: 20.0 # Switch background gameplay clip every 15-25 seconds
+
   # Gameplay background sources (yt-dlp URLs or local paths)
   gameplay_sources:
     - url: "https://youtu.be/s600FYgI5-s?si=VH1KY-p5GMVejos9"

@@ -1712,32 +1712,56 @@ class RedditDailyBot:
             self.logger.info("  STEP 4 ►  Skipping gameplay video processing (using static backgrounds)")
             processed_gameplay = None
         else:
-            self.logger.info("  STEP 4 ►  Processing gameplay background")
+            self.logger.info("  STEP 4 ►  Processing gameplay background (Multi-Clip Stitching)")
             downloader = GameplayDownloader(self.config, self.logger)
             hash_pipeline = HashDestructionPipeline(self.config, self.logger)
-
-            # Ensure we have gameplay footage
-            try:
-                gameplay_source = downloader.get_random_gameplay()
-            except FileNotFoundError:
-                self.logger.info("    No gameplay files found locally. Attempting to download from configured sources...")
-                downloader.download_all()
-                gameplay_source = downloader.get_random_gameplay()
-            self.logger.info(f"    Source gameplay: {gameplay_source.name}")
 
             # Get audio duration for matching gameplay length
             from pydub import AudioSegment
 
             audio_seg = AudioSegment.from_file(str(processed_audio))
             audio_duration_sec = len(audio_seg) / 1000.0
+            target_gameplay_duration = audio_duration_sec + 2.0  # small buffer
 
-            # Process gameplay through hash destruction pipeline
+            multi_clip_enabled = self.config.get("video", {}).get("multi_clip_stitching", True)
+            segment_dur = float(self.config.get("video", {}).get("clip_segment_duration", 20.0))
+
             processed_gameplay = self.temp_dir / f"gameplay_processed_p{part['part_number']}.mp4"
-            hash_pipeline.process(
-                input_path=gameplay_source,
-                target_duration=audio_duration_sec + 2.0,  # small buffer
-                output_path=processed_gameplay,
-            )
+
+            if multi_clip_enabled:
+                try:
+                    clips_plan = downloader.get_stitched_gameplay_plan(
+                        target_duration=target_gameplay_duration,
+                        segment_duration=segment_dur,
+                    )
+                except FileNotFoundError:
+                    self.logger.info("    No gameplay files found locally. Attempting to download from configured sources...")
+                    downloader.download_all()
+                    clips_plan = downloader.get_stitched_gameplay_plan(
+                        target_duration=target_gameplay_duration,
+                        segment_duration=segment_dur,
+                    )
+
+                hash_pipeline.process_multi_clip(
+                    clips=clips_plan,
+                    target_duration=target_gameplay_duration,
+                    output_path=processed_gameplay,
+                )
+            else:
+                try:
+                    gameplay_source = downloader.get_random_gameplay()
+                except FileNotFoundError:
+                    self.logger.info("    No gameplay files found locally. Attempting to download from configured sources...")
+                    downloader.download_all()
+                    gameplay_source = downloader.get_random_gameplay()
+                self.logger.info(f"    Source gameplay: {gameplay_source.name}")
+
+                hash_pipeline.process(
+                    input_path=gameplay_source,
+                    target_duration=target_gameplay_duration,
+                    output_path=processed_gameplay,
+                )
+
             self.logger.info(f"    Processed gameplay: {processed_gameplay.name}")
 
         # ── Step 5: Final Compositing ────────────────────────────────

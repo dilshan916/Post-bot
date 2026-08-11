@@ -16,7 +16,7 @@ import json
 import random
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from src.utils import (
     BotLogger,
@@ -194,6 +194,109 @@ class GameplayDownloader:
             f"(position {file_names.index(chosen.name) + 1}/{len(mp4_files)}: {', '.join(file_names)})"
         )
         return chosen
+
+    def get_stitched_gameplay_plan(
+        self,
+        target_duration: float,
+        segment_duration: float = 20.0,
+    ) -> List[Dict[str, Any]]:
+        """Select a sequence of diverse gameplay segments from available videos to cover target_duration.
+
+        Args:
+            target_duration: Total duration needed in seconds.
+            segment_duration: Target duration per segment before cutting to another background.
+
+        Returns:
+            List of dicts: [{"path": Path, "start": float, "duration": float, "loop": bool}, ...]
+        """
+        mp4_files: List[Path] = sorted(
+            [
+                p for p in self.gameplay_dir.glob("*.mp4")
+                if not p.name.startswith(".") and not p.name.endswith(".part") and p.stat().st_size > 1000000
+            ]
+        )
+
+        if not mp4_files:
+            raise FileNotFoundError(
+                f"No gameplay videos found in {self.gameplay_dir}."
+            )
+
+        # Load state to know where to start rotation
+        state_file = resolve_path("data/gameplay_state.json")
+        last_file = ""
+        try:
+            if state_file.exists():
+                with open(state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    last_file = state.get("last_gameplay_file", "")
+        except Exception:
+            pass
+
+        file_names = [p.name for p in mp4_files]
+        if last_file in file_names:
+            current_idx = (file_names.index(last_file) + 1) % len(mp4_files)
+        else:
+            current_idx = 0
+
+        # Build plan
+        plan: List[Dict[str, Any]] = []
+        remaining_duration = target_duration
+
+        while remaining_duration > 0.1:
+            chosen_video = mp4_files[current_idx]
+            current_idx = (current_idx + 1) % len(mp4_files)
+
+            # Determine segment length
+            seg_len = min(remaining_duration, segment_duration)
+            if remaining_duration - seg_len < 6.0 and remaining_duration <= segment_duration * 1.3:
+                seg_len = remaining_duration
+
+            # Probe duration of chosen video
+            try:
+                vid_dur = self._get_file_duration(chosen_video)
+            except Exception:
+                vid_dur = 30.0
+
+            if vid_dur <= seg_len:
+                start_pt = 0.0
+                actual_dur = seg_len
+                loop = True
+            else:
+                start_pt = float(random.randint(0, int(vid_dur - seg_len)))
+                actual_dur = seg_len
+                loop = False
+
+            plan.append({
+                "path": chosen_video,
+                "start": start_pt,
+                "duration": actual_dur,
+                "loop": loop,
+            })
+            remaining_duration -= actual_dur
+
+        # Save last used video in state
+        try:
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(state_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "last_gameplay_file": plan[-1]["path"].name,
+                    "total_available": len(mp4_files),
+                }, f, indent=2)
+        except Exception as e:
+            self.logger.warning(f"Could not persist gameplay state: {e}")
+
+        clip_summary = " -> ".join([f"{c['path'].name} ({c['duration']:.1f}s)" for c in plan])
+        self.logger.info(f"Multi-clip gameplay plan ({len(plan)} cuts): {clip_summary}")
+        return plan
+
+    def _get_file_duration(self, path: Path) -> float:
+        """Helper to probe file duration."""
+        cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(path)]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        if res.returncode == 0:
+            data = json.loads(res.stdout)
+            return float(data.get("format", {}).get("duration", 30.0))
+        return 30.0
 
     def download_all(self) -> List[Path]:
         """Download every source listed in ``video.gameplay_sources``.
@@ -401,6 +504,126 @@ class HashDestructionPipeline:
         except subprocess.TimeoutExpired:
             self.logger.error("FFmpeg timed out after 10 minutes.")
             raise RuntimeError("FFmpeg processing timed out.")
+
+    def process_multi_clip(
+        self,
+        clips: List[Dict[str, Any]],
+        target_duration: float,
+        output_path: Path,
+    ) -> Path:
+        """Run hash-destruction pipeline across stitched multi-clip video background.
+
+        Concatenates multiple gameplay sources into a seamless, dynamic multi-background
+        vertical video with normalized 1080x1920 9:16 resolution and anti-duplicate hash filters.
+
+        Args:
+            clips: List of clip specs [{"path": Path, "start": float, "duration": float, "loop": bool}, ...]
+            target_duration: Desired output length in seconds.
+            output_path: Where to write the processed result.
+
+        Returns:
+            output_path on success.
+        """
+        if not clips:
+            raise ValueError("No clips provided for multi-clip processing.")
+
+        if len(clips) == 1:
+            return self.process(
+                input_path=clips[0]["path"],
+                target_duration=target_duration,
+                output_path=output_path,
+            )
+
+        if not check_ffmpeg():
+            raise FileNotFoundError("ffmpeg is not installed or not on PATH.")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        codec: str = self.video_cfg.get("codec", "libx264")
+        preset: str = self.video_cfg.get("preset", "medium")
+        if preset not in ["medium", "fast"]:
+            preset = "medium"
+
+        crf: int = self.video_cfg.get("crf", 18)
+        fps: int = self.video_cfg.get("fps", 30)
+        pixel_format: str = self.video_cfg.get("pixel_format", "yuv420p")
+
+        scale_w: int = self.filter_cfg.get("scale_width", 1200)
+        scale_h: int = self.filter_cfg.get("scale_height", 2130)
+        crop_w: int = self.filter_cfg.get("crop_width", 1080)
+        crop_h: int = self.filter_cfg.get("crop_height", 1920)
+        hue_h: float = self.filter_cfg.get("hue_shift", 0.5)
+        sat: float = self.filter_cfg.get("saturation_mult", 1.02)
+        bright: float = self.filter_cfg.get("brightness_shift", 0.01)
+        noise_s: int = self.filter_cfg.get("noise_strength", 2)
+        noise_f: str = self.filter_cfg.get("noise_flags", "t")
+
+        cmd: List[str] = ["ffmpeg", "-y"]
+        filter_parts: List[str] = []
+        concat_inputs: List[str] = []
+
+        for i, clip in enumerate(clips):
+            if clip.get("loop", False):
+                cmd.extend(["-stream_loop", "-1"])
+            cmd.extend([
+                "-ss", f"{clip['start']:.3f}",
+                "-t", f"{clip['duration']:.3f}",
+                "-i", str(clip["path"]),
+            ])
+            # Individual segment scaling, 9:16 crop, standardized framerate
+            filter_parts.append(
+                f"[{i}:v]scale={scale_w}:{scale_h}:force_original_aspect_ratio=increase,"
+                f"crop={crop_w}:{crop_h},setsar=1,fps={fps},setpts=PTS-STARTPTS[v{i}]"
+            )
+            concat_inputs.append(f"[v{i}]")
+
+        # Concat all segments together and apply post-color hash destruction
+        concat_str = "".join(concat_inputs) + f"concat=n={len(clips)}:v=1:a=0[v_raw]"
+        filter_parts.append(concat_str)
+        filter_parts.append(
+            f"[v_raw]hue=h={hue_h}:s={sat}:b={bright},"
+            f"noise=alls={noise_s}:allf={noise_f},mpdecimate,setpts=N/FRAME_RATE/TB[v_out]"
+        )
+
+        filter_complex = ";".join(filter_parts)
+
+        cmd.extend([
+            "-filter_complex", filter_complex,
+            "-map", "[v_out]",
+            "-t", f"{target_duration:.3f}",
+            "-c:v", codec,
+            "-preset", preset,
+            "-crf", str(crf),
+            "-r", str(fps),
+            "-pix_fmt", pixel_format,
+            "-map_metadata", "-1",
+            "-map_chapters", "-1",
+            "-movflags", "+faststart",
+            str(output_path),
+        ])
+
+        clip_labels = " + ".join([f"{c['path'].stem}({c['duration']:.1f}s)" for c in clips])
+        self.logger.info(
+            f"Stitching {len(clips)} gameplay clips: {clip_labels} → {output_path.name}"
+        )
+        self.logger.debug(f"FFmpeg command: {' '.join(cmd)}")
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode != 0:
+                stderr_tail = (result.stderr or "")[-1000:]
+                self.logger.error(f"FFmpeg multi-clip stitch failed: {stderr_tail}")
+                raise RuntimeError(f"FFmpeg multi-clip stitch failed: {stderr_tail}")
+
+            self.logger.info(
+                f"Multi-clip stitching complete: {output_path.name} "
+                f"({output_path.stat().st_size / (1024 * 1024):.1f} MB)"
+            )
+            return output_path
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("FFmpeg multi-clip timed out after 10 minutes.")
+            raise RuntimeError("FFmpeg multi-clip processing timed out.")
 
     # ---- private helpers ---------------------------------------------------
 
