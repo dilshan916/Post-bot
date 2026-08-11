@@ -34,6 +34,8 @@ assets/gameplay/*
 !assets/gameplay/default_gameplay.mp4
 !assets/gameplay/gameplay_2.mp4
 !assets/gameplay/gameplay_3.mp4
+!assets/gameplay/gameplay_4.mp4
+!assets/gameplay/gameplay_5.mp4
 assets/vosk_model/
 
 # Config & Credentials (contains API keys)

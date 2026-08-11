@@ -136,16 +136,25 @@ class GameplayDownloader:
             )
 
     def get_random_gameplay(self) -> Path:
-        """Return a random ``.mp4`` file from the gameplay directory.
+        """Return the next .mp4 file in sequential rotation from the gameplay directory.
+
+        Maintains persistent state in data/gameplay_state.json so that runs
+        seamlessly rotate between all available gameplay backgrounds without
+        repeating the same background twice in a row.
 
         Returns:
-            Path to a randomly selected gameplay clip.
+            Path to the selected gameplay clip.
 
         Raises:
-            FileNotFoundError: If no ``.mp4`` files exist in the gameplay
-                directory.
+            FileNotFoundError: If no .mp4 files exist in the gameplay directory.
         """
-        mp4_files: List[Path] = sorted(self.gameplay_dir.glob("*.mp4"))
+        # Filter valid mp4 files, excluding temporary or hidden files
+        mp4_files: List[Path] = sorted(
+            [
+                p for p in self.gameplay_dir.glob("*.mp4")
+                if not p.name.startswith(".") and not p.name.endswith(".part") and p.stat().st_size > 1000000
+            ]
+        )
 
         if not mp4_files:
             raise FileNotFoundError(
@@ -153,10 +162,36 @@ class GameplayDownloader:
                 "Download gameplay footage first or place .mp4 files there."
             )
 
-        chosen: Path = random.choice(mp4_files)
+        # Stateful Round-Robin Rotation
+        state_file = resolve_path("data/gameplay_state.json")
+        last_file = ""
+        try:
+            if state_file.exists():
+                with open(state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    last_file = state.get("last_gameplay_file", "")
+        except Exception:
+            pass
+
+        file_names = [p.name for p in mp4_files]
+        if last_file in file_names:
+            last_idx = file_names.index(last_file)
+            next_idx = (last_idx + 1) % len(mp4_files)
+            chosen = mp4_files[next_idx]
+        else:
+            chosen = random.choice(mp4_files)
+
+        # Save new state
+        try:
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(state_file, "w", encoding="utf-8") as f:
+                json.dump({"last_gameplay_file": chosen.name, "total_available": len(mp4_files)}, f, indent=2)
+        except Exception as e:
+            self.logger.warning(f"Could not persist gameplay state: {e}")
+
         self.logger.info(
-            f"Selected random gameplay: {chosen.name} "
-            f"(from {len(mp4_files)} available)"
+            f"Rotated background to: {chosen.name} "
+            f"(position {file_names.index(chosen.name) + 1}/{len(mp4_files)}: {', '.join(file_names)})"
         )
         return chosen
 
