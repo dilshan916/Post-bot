@@ -256,31 +256,31 @@ monologue:
 
     1. Speak exclusively in the first person ("I", "my", "me").
 
-    2. CRITICAL CLICKBAIT HOOK: The very first sentence MUST hit like a slap — state the most extreme, shocking, or emotionally devastating moment of the story. Start at the absolute climax, betrayal, or conflict — the highest-stakes consequence or fallout, not the setup that caused it. If a listener hears ONLY this one sentence, they should be hooked. Do NOT build up slowly. Do NOT reveal the story's key statistic or number in the hook — save that for the delayed escalation reveal near the end. BANNED openers: "I'm still reeling...", "I can't believe...", "I never thought...", "I'm still trying to process...", or any sentence that describes how you feel ABOUT the event rather than the event itself.
-       * Bad (too slow): "My brother-in-law called my wife a bad parent at dinner."
-       * Good (dramatic hook): "I stood there silently while my own family tore my wife to shreds."
-       * Bad (reveals key stat): "My ex-fiancé has contacted me twenty times since the breakup."
-       * Good (saves stat for later): "My ex-fiancé destroyed our engagement and still won't leave me alone."
+    2. CRITICAL CLICKBAIT HOOK: The very first sentence MUST hit like a slap — state the most extreme, shocking, or emotionally devastating moment of the story. Start at the climax, betrayal, or conflict. BANNED openers: "I'm still reeling...", "I can't believe...", "I never thought...", "Today...". If the source lacks one clearly extreme moment, lead with the highest-stakes true detail available — do not invent intensity to compensate.
 
-    3. Jump directly into the emotional core within the first 5 words. Absolutely ZERO introductory padding, greetings, meta-commentary, or setup transitions. Do not say "So," "Okay," "Hey guys," "Reddit," "Today," "I'm still," or "I can't believe." The first word should thrust the listener into the action or conflict.
+    3. Jump directly into the emotional core within the first sentence. Zero introductory padding, greetings, meta-commentary, or setup transitions.
 
-    4. Translate all text shorthand into full, natural spoken-word phrases (e.g., convert "AITA" to "Am I the jerk", "ex" to "ex-partner", "MIL" to "mother-in-law").
+    4. Expand ALL Reddit acronyms and relationship shorthand into natural spoken phrases (e.g., "AITA" to "am I the jerk", "ex" to "ex-partner", "MIL" to "mother-in-law", "SO" to "partner", "BF/GF" to "boyfriend/girlfriend", "FIL/BIL" to "father-in-law/brother-in-law", "DD/DS" to "daughter/son", "OP" to "I/me"). Infer meaning from context for any shorthand not listed here.
 
-    5. Write in brief, punchy, human sentences — aim for 20 words or fewer per sentence. Break any long thought into 2-3 short, impactful sentences. The full monologue should be 15-25 sentences long — long enough to tell the complete story with emotional depth, short enough to stay tight. Do NOT over-cut: every key story beat from the source (confrontations, conversations, decisions, emotional reactions) must be included. Condense them into punchy sentences, but never skip them. This is optimized for rapid, continuous Text-to-Speech breathing patterns and word-by-word dynamic subtitles. Keep the tension scaling upward with every sentence.
+    5. Write in brief, punchy, human sentences (under 20 words per sentence, 15-25 sentences total). Optimized for rapid TTS breathing patterns.
 
-    6. Strip out all editorial structural markers like "EDIT:", "TL;DR:", or chronological bullet points. Merge into a seamless, gripping, continuous narrative flow.
+    6. Strip out all editorial markers like "EDIT:", "TL;DR:", or chronological bullet points.
 
-    7. CURIOSITY-GAP BEAT: Include exactly ONE standalone sentence — no more, no less — that hints a hard choice, twist, or discovery is coming WITHOUT stating what it is. Placement: it MUST appear in the FIRST HALF of the monologue (before the midpoint). If the monologue is 20 sentences, the curiosity-gap must be in sentences 1-10. Content: the sentence MUST name a specific person, object, or action unique to THIS story. BANNED: any sentence starting with "Something", "What I did", "What I said", or "What happened." Also banned: any generic foreshadowing that could apply to any story. The line must be so specific that it only makes sense for this particular story. Do NOT use any example phrasing from these instructions — generate a completely original line every time.
+    7. CURIOSITY-GAP BEAT: Include exactly ONE standalone teaser sentence in the FIRST HALF of the monologue that hints a hard choice or discovery is coming without revealing it. This tension must be resolved later in the story — never left unaddressed.
 
-    8. DELAYED ESCALATION REVEAL: If the story contains a key number, cost, timespan, or escalating consequence, do NOT state it in the opening hook or anywhere early in the monologue. Do NOT bury it inside another sentence. Hold it back and deliver it as its own standalone sentence of 10 words or fewer, positioned as the second-to-last sentence (immediately before the final cliffhanger question), so it lands as a gut-punch. Deliver the stat ONCE only — never restate the same number in different units (e.g. do not say both "six years" and "seventy-two months").
+    8. DELAYED ESCALATION REVEAL: Deliver key numbers, costs, or escalating consequences as a standalone sentence before the ending, as a gut-punch.
 
-    9. CRITICAL CLIFFHANGER ENDING: Never resolve the conflict, wrap it up cleanly, or land on acceptance, closure, or agreement. The final sentence MUST be a direct, unresolved question spoken by you, the narrator. The question MUST match the tone of the story: if the story is dark/serious, the question should be raw and emotional; if the story is light/funny/absurd, the question should invite the audience to imagine themselves in the situation and react (e.g. "Would you have laughed... or been offended?"). The goal is to drive comment engagement — the best ending makes viewers want to type their opinion. The question must be short (under 15 words), reference the specific conflict, and use only facts that exist in the source story. Do NOT introduce new mysteries, secrets, or implications of rejection/disownment that aren't in the original story. Nothing may follow this line.
+    9. CRITICAL RESOLUTION ENDING: End the story with its true outcome from the source — what actually happened, what was decided, or how it concluded. The final sentence must feel conclusive and complete. Never end on a question, and never leave the conflict open.
 
-    10. LENGTH AND COMPLETENESS DISCIPLINE: The monologue must be 15-25 sentences. Every sentence must either escalate tension or reveal new information. Cut any sentence that restates a point already made — but do NOT cut story beats. If the source story mentions a key conversation, confrontation, emotional moment, or decision, it MUST appear in the monologue. Condense, never skip. If two sentences make the same emotional point, keep only the stronger one. Never restate the same fact in different units or phrasing.
+    10. NO INVENTED RESOLUTION: If the source material has no clear ending (unresolved thread, no update from OP), state this honestly as the closing beat rather than fabricating closure.
 
-    11. NO FABRICATION: Every fact, number, emotion, and plot point in the monologue MUST exist in the original source story. Do NOT invent secrets, subplots, rejections, or consequences that aren't in the source. If the source story is light or funny, do not inject darkness or drama that isn't there. If the story doesn't mention a specific number for a stat, do not invent one.
+    11. CAUSAL FLOW: Every sentence between beats must advance cause-and-effect — building on what just happened — not merely restate prior facts.
 
-    CRITICAL CONSTRAINT: Output ONLY the raw spoken script text. No titles, no introduction, no concluding notes, no meta-tags, no conversational filler. If you output a single word of commentary outside the character's direct spoken script, the pipeline will break. Begin speaking NOW:
+    12. LENGTH AND COMPLETENESS DISCIPLINE: 15-25 sentences total. Condense every major story beat without skipping any.
+
+    13. NO FABRICATION: Every fact, number, and emotion MUST exist in the original source story.
+
+    CRITICAL CONSTRAINT: Output ONLY the raw spoken script text. No titles, no markdown, no filler.
 
 conversational:
   subreddits:
