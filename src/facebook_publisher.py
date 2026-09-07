@@ -128,7 +128,7 @@ class FacebookReelsPublisher:
         log.info("=" * 60)
         return results
 
-    def publish_reel(self, video_path: Path, caption: str, pinned_comment: Optional[str] = None, scheduled_publish_time: Optional[int] = None) -> bool:
+    def publish_reel(self, video_path: Path, caption: str, pinned_comment: Optional[str] = None, scheduled_publish_time: Optional[int] = None, cover_image_path: Optional[Path] = None) -> bool:
         """Uploads and publishes a vertical MP4 video as a Reel on the configured Facebook Page.
 
         Args:
@@ -136,6 +136,7 @@ class FacebookReelsPublisher:
             caption: Reel text description and hashtags.
             pinned_comment: Optional first comment text to post under the Reel.
             scheduled_publish_time: Optional UNIX timestamp for scheduled publishing.
+            cover_image_path: Optional path to standalone .jpg cover thumbnail image for Reddit Daily.
 
         Returns:
             True if the Reel was successfully processed and published/scheduled, False otherwise.
@@ -275,6 +276,22 @@ class FacebookReelsPublisher:
                 self.log.info(f"Reel successfully scheduled! Facebook Reel video ID: {video_id}")
             else:
                 self.log.info(f"Reel successfully published! Facebook Reel video ID: {video_id}")
+            
+            # Upload standalone custom cover thumbnail image if provided (specifically for Reddit Daily)
+            if cover_image_path and cover_image_path.exists():
+                self.log.info(f"Uploading standalone cover thumbnail image ({cover_image_path.name}) to Facebook for video {video_id}...")
+                try:
+                    thumb_url = f"https://graph.facebook.com/v19.0/{video_id}/thumbnails"
+                    with open(cover_image_path, "rb") as thumb_file:
+                        files = {"source": thumb_file}
+                        data = {"access_token": self.access_token, "is_preferred": "true"}
+                        res_thumb = requests.post(thumb_url, data=data, files=files, timeout=30, proxies=self.proxies)
+                        if res_thumb.status_code == 200:
+                            self.log.info(f"✅ Custom cover thumbnail uploaded and set as preferred for Facebook Reel (ID: {video_id}).")
+                        else:
+                            self.log.warning(f"Custom thumbnail upload returned HTTP {res_thumb.status_code}: {res_thumb.text[:150]}")
+                except Exception as thumb_err:
+                    self.log.warning(f"Error uploading custom cover thumbnail: {thumb_err}")
             
             # Post the teaser first comment if provided (only if not scheduled)
             if pinned_comment and not scheduled_publish_time:

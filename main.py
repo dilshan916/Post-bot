@@ -1093,7 +1093,24 @@ class RedditDailyBot:
                         self.logger.info("Initializing Facebook Reels auto-poster...")
                         from src.facebook_publisher import FacebookReelsPublisher
                         publisher = FacebookReelsPublisher(self.config, self.logger, pipeline_mode=pipeline_mode)
-                        publish_success = publisher.publish_reel(path, caption_to_use, comment_to_use)
+                        
+                        cover_path = None
+                        if pipeline_mode == "monologue":
+                            try:
+                                from src.cover_generator import CoverGenerator
+                                cover_gen = CoverGenerator(self.config, self.logger)
+                                cover_out_file = self.output_dir / f"{path.stem}_COVER.jpg"
+                                cover_path = cover_gen.generate_cover(
+                                    title=story.get("title", "Reddit Story"),
+                                    subreddit=story.get("subreddit", "r/TrueOffMyChest"),
+                                    sticker_path=PROJECT_ROOT / "assets" / "stickers" / "chibi_female_angry.png",
+                                    output_path=cover_out_file
+                                )
+                                self.logger.info(f"Generated standalone cover thumbnail for Reddit Daily: {cover_path.name}")
+                            except Exception as cover_err:
+                                self.logger.warning(f"Cover image generation encountered an issue (non-fatal): {cover_err}")
+
+                        publish_success = publisher.publish_reel(path, caption_to_use, comment_to_use, cover_image_path=cover_path)
                         if publish_success:
                             self.logger.info("Facebook Reel successfully published!")
                         else:
