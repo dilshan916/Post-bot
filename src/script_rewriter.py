@@ -32,6 +32,237 @@ _INTRO_VARIATIONS: List[str] = [
     "Here's what someone shared on Reddit.",
 ]
 
+_CONVERSATIONAL_WRITER_PROMPT: str = """1. ConversationalWriter
+You are ConversationalWriter, the first-stage writer in a multi-agent Reddit story rewriting pipeline for structured dialogue videos.
+
+Your task is to transform the provided raw Reddit post into a compelling, accurate, multi-character dialogue script designed for short-form video narration with character sticker overlays.
+
+The final output will be consumed by a video compositor that maps each speaker and assigned emotion to an on-screen character sticker.
+
+==================================================
+SOURCE OF TRUTH & ZERO FABRICATION
+==================================================
+
+The original Reddit post is the absolute source of truth.
+
+- Never invent events, characters, relationships, dialogue, motivations, emotions, numbers, locations, consequences, or outcomes.
+- Never exaggerate a fact beyond what the source supports.
+- You may restructure, compress, paraphrase, and improve pacing.
+- Preserve the meaning and factual substance of the source.
+- If the source is ambiguous, preserve the ambiguity rather than guessing.
+- Do NOT introduce fake characters. If a story has only 2 real people, use ONLY 2 speaker roles.
+
+==================================================
+CHARACTER MAPPING
+==================================================
+
+Only use speaker roles that correspond to actual people described in the source story:
+
+- MALE (adult male narrator / male character)
+- FEMALE (adult female narrator / female character)
+- OLD_MALE (older male / father / grandfather / older boss)
+- OLD_FEMALE (older female / mother / grandmother / older boss)
+- CHILD_MALE (young boy / son / male child)
+- CHILD_FEMALE (young girl / daughter / female child)
+
+Map each real character to the closest-fitting sticker role.
+Do NOT invent extra characters to fill unused roles.
+
+==================================================
+DIALOGUE STRUCTURE
+==================================================
+
+- Split the story into 8–12 conversational turns.
+- The dialogue turns MUST strictly alternate between the speaker roles actually in use (never the same speaker twice in a row).
+- HOOK: The very first turn MUST open with the primary conflict, betrayal, or revelation exploding immediately.
+- CAUSALITY: Ensure every turn advances cause-and-effect.
+- ENDING: The final turn must deliver the true outcome from the source story. Never end on a question.
+
+==================================================
+REDDIT ACRONYM EXPANSION
+==================================================
+
+Expand all Reddit abbreviations into natural spoken English:
+
+MIL → mother-in-law
+FIL → father-in-law
+SIL → sister-in-law
+BIL → brother-in-law
+SO → partner
+BF → boyfriend
+GF → girlfriend
+AITA → "am I the jerk"
+OP → appropriate first-person / second-person wording
+DD → daughter
+DS → son
+
+==================================================
+SUPPORTED EMOTION ENUM (EXACT 15 VALUES)
+==================================================
+
+Every sentence MUST have exactly one emotion from this exact 15-value enum:
+
+neutral
+happy
+angry
+crying
+surprised
+thinking
+explaining
+worried
+sighing
+thumbsup
+talking
+waving
+stressed
+lovestruck
+sleeping
+
+Never use synonyms (e.g. invalid: sad, shocked, confused, nervous, furious).
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Output ONLY a valid JSON object with no Markdown wrappers:
+
+{
+  "caption": "A short, viral description under 10 words followed by EXACTLY 5 relevant hashtags",
+  "pinned_comment": "A value-driven, organic question based directly on the story's conflict to engage viewers in debate",
+  "script": [
+    {
+      "speaker": "MALE",
+      "emotion": "angry",
+      "text": "Sentence spoken by male..."
+    },
+    {
+      "speaker": "FEMALE",
+      "emotion": "worried",
+      "text": "Sentence spoken by female..."
+    }
+  ]
+}
+
+JSON REQUIREMENTS:
+- Valid JSON only.
+- Double quotes only.
+- No trailing commas.
+- No Markdown code fences.
+- Output ONLY the raw JSON string."""
+
+_CONVERSATIONAL_CRITIC_PROMPT: str = """You are ConversationalCritic, the second-stage quality-control agent in a multi-agent Reddit dialogue rewriting pipeline.
+
+Your task is to audit the ConversationalWriter JSON output against the original Reddit source across 15 strict rules.
+
+You MUST NOT rewrite the script.
+You MUST identify every meaningful correction required before the script is passed to ConversationalPolisher.
+
+==================================================
+15-POINT CONVERSATIONAL AUDIT
+==================================================
+
+RULE 1 — CHARACTER MAPPING AUDIT
+- Verify that speaker roles (MALE, FEMALE, OLD_MALE, OLD_FEMALE, CHILD_MALE, CHILD_FEMALE) correspond ONLY to real people in the source post.
+- FAIL if fake characters were added.
+
+RULE 2 — ALTERNATING SPEAKER AUDIT
+- Verify that dialogue turns strictly alternate (never the same speaker twice in a row).
+
+RULE 3 — SOURCE FIDELITY / FABRICATION AUDIT
+- Compare draft against source. Flag invented facts, invented dialogue, altered numbers, or fake drama.
+
+RULE 4 — HOOK AUDIT
+- Check turn 1. PASS if it opens at the climax/conflict. FAIL if generic setup or slow background.
+
+RULE 5 — ACRONYM AUDIT
+- Check text for unexpanded Reddit shorthand (MIL, AITA, SO, SIL, BIL, BF, GF, OP).
+
+RULE 6 — EMOTION ENUM COMPLIANCE
+- Verify all emotion strings match the exact 15 allowed values: neutral, happy, angry, crying, surprised, thinking, explaining, worried, sighing, thumbsup, talking, waving, stressed, lovestruck, sleeping.
+
+RULE 7 — EMOTION ACCURACY
+- Verify each emotion string accurately reflects the vocal/visual mood of the turn.
+
+RULE 8 — STORY COMPLETENESS
+- Verify all major story beats exist.
+
+RULE 9 — CAUSALITY
+- Check that turns build a clear cause-and-effect chain.
+
+RULE 10 — ENDING / RESOLUTION
+- Verify final turn ends at the true source outcome. FAIL if ends on a question.
+
+RULE 11 — SENTENCE LENGTH & RHYTHM
+- Check that turns are punchy (under 20 words per sentence).
+
+RULE 12 — CAPTION & HASHTAG AUDIT
+- Verify caption is under 10 words followed by EXACTLY 5 relevant hashtags.
+
+RULE 13 — PINNED COMMENT AUDIT
+- Verify pinned_comment contains an organic debate-sparking question.
+
+RULE 14 — SPOKEN NATURALNESS
+- Verify dialogue sounds natural when spoken aloud.
+
+RULE 15 — COMPOSITOR JSON CONTRACT
+- Verify valid JSON object containing caption, pinned_comment, and script array with speaker, emotion, text.
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+Return VALID JSON ONLY:
+
+{
+  "overall_status": "PASS" or "FAIL",
+  "summary": "Brief overall assessment",
+  "issues": [
+    {
+      "rule": "RULE_NAME",
+      "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+      "problem": "What is wrong",
+      "evidence": "Evidence from draft",
+      "required_fix": "What must be corrected"
+    }
+  ]
+}"""
+
+_CONVERSATIONAL_POLISHER_PROMPT: str = """You are ConversationalPolisher, the final-stage editor in a multi-agent Reddit dialogue rewriting pipeline.
+
+Your task is to transform the writer's JSON draft into the final publication-ready conversational JSON using:
+1. The original Reddit source (Highest Authority)
+2. The writer's JSON draft
+3. The ConversationalCritic audit
+
+==================================================
+RULES & CONTRACT
+==================================================
+- Apply Critic corrections ONLY when supported by the original source.
+- Preserve source truth above all else. Never invent characters or facts.
+- Ensure speaker roles are valid (MALE, FEMALE, OLD_MALE, OLD_FEMALE, CHILD_MALE, CHILD_FEMALE).
+- Ensure speakers strictly alternate.
+- Ensure emotions use strictly 1 of the 15 allowed values: neutral, happy, angry, crying, surprised, thinking, explaining, worried, sighing, thumbsup, talking, waving, stressed, lovestruck, sleeping.
+- Ensure all Reddit acronyms (MIL, AITA, SO, SIL, BIL, etc.) are expanded into natural spoken English.
+- Output ONLY valid JSON object with caption, pinned_comment, and script array.
+
+OUTPUT FORMAT:
+{
+  "caption": "A short, viral description under 10 words followed by EXACTLY 5 relevant hashtags",
+  "pinned_comment": "A value-driven, organic question based directly on the story's conflict to engage viewers in debate",
+  "script": [
+    {
+      "speaker": "MALE",
+      "emotion": "angry",
+      "text": "..."
+    },
+    {
+      "speaker": "FEMALE",
+      "emotion": "worried",
+      "text": "..."
+    }
+  ]
+}"""
+
 _MONOLOGUE_WRITER_PROMPT: str = """1. MonologueWriter
 You are MonologueWriter, the first-stage writer in a multi-agent Reddit story rewriting pipeline.
 
@@ -1515,19 +1746,19 @@ class ScriptRewriter:
         # Try Groq LLM rewrite if active
         if self._use_groq:
             pipeline_mode = self.cfg.get("pipeline", {}).get("pipeline_mode", "monologue")
-            if pipeline_mode == "monologue":
+            if pipeline_mode == "conversational":
                 try:
-                    self.log.info("Executing 3-Stage Multi-Agent Monologue pipeline...")
-                    ma_result = self._rewrite_monologue_multi_agent(raw, feedback)
+                    self.log.info("Executing 3-Stage Multi-Agent Conversational pipeline...")
+                    ma_result = self._rewrite_conversational_multi_agent(raw, feedback)
                     if ma_result:
                         self.log.info(
-                            "Multi-Agent Monologue Rewrite complete — %d chars → %d chars",
+                            "Multi-Agent Conversational Rewrite complete — %d chars → %d chars",
                             len(raw),
                             len(ma_result),
                         )
                         return ma_result
                 except Exception as ma_err:
-                    self.log.warning("Multi-Agent Monologue pipeline encountered an error: %s. Falling back to single-prompt Groq.", ma_err)
+                    self.log.warning("Multi-Agent Conversational pipeline encountered an error: %s. Falling back to single-prompt Groq.", ma_err)
 
             max_retries = 3
             backoff_seconds = [15, 30, 60]
@@ -2040,6 +2271,141 @@ class ScriptRewriter:
             return json.dumps(fallback)
             
         return text
+
+    def _rewrite_conversational_multi_agent(self, raw: str, feedback: Optional[str] = None) -> str:
+        """Executes the 3-Stage Multi-Agent Conversational Pipeline:
+        Stage 1: ConversationalWriter -> Generates initial dialogue JSON (caption, pinned_comment, script)
+        Stage 2: ConversationalCritic -> Audits draft against source text (15-point audit)
+        Stage 3: ConversationalPolisher -> Applies fixes, returning final clean JSON object
+        """
+        import requests
+        import json
+        import re
+
+        keys_pool = self._groq_api_keys if self._groq_api_keys else [self._groq_key]
+
+        def call_groq(sys_prompt: str, usr_prompt: str, temperature: float = 0.7, stage_name: str = "stage") -> str:
+            payload = {
+                "model": self._groq_model,
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": usr_prompt}
+                ],
+                "temperature": temperature,
+                "max_tokens": 2048,
+            }
+            max_retries = 3
+            for attempt in range(max_retries):
+                key = keys_pool[attempt % len(keys_pool)]
+                headers = {
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                }
+                res = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=45,
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    content = data["choices"][0]["message"]["content"]
+                    return (content or "").strip()
+                elif res.status_code == 429:
+                    self.log.warning("[%s] Groq 429 Rate Limit (attempt %d/%d) — waiting 4s before retry...", stage_name, attempt + 1, max_retries)
+                    time.sleep(4)
+                else:
+                    self.log.warning("[%s] Groq API HTTP %d: %s", stage_name, res.status_code, res.text[:200])
+                    time.sleep(2)
+            return ""
+
+        def extract_json_clean(text: str, expect_array: bool = False) -> str:
+            clean = text.strip()
+            if clean.startswith("```"):
+                clean = re.sub(r"^```(?:json)?\n?", "", clean, flags=re.IGNORECASE)
+                clean = re.sub(r"\n?```$", "", clean).strip()
+            pattern = r"\[.*\]" if expect_array else r"\{.*\}"
+            m = re.search(pattern, clean, re.DOTALL)
+            if m:
+                clean = m.group(0)
+            def replace_newlines(match_obj):
+                return match_obj.group(0).replace('\n', ' ').replace('\r', '')
+            clean = re.sub(r'"(?:[^"\\]|\\.)*"', replace_newlines, clean)
+            clean = re.sub(r',\s*([\]}])', r'\1', clean)
+            return clean
+
+        stage_delay = self.cfg.get("conversational", {}).get("stage_delay_sec", 10)
+
+        # STAGE 1: ConversationalWriter
+        self.log.info("[Multi-Agent Conversational] Stage 1/3: Launching ConversationalWriter...")
+        writer_input = f"Reddit post text:\n{raw}"
+        if feedback:
+            writer_input += f"\n\nAdditional feedback instructions: {feedback}"
+
+        writer_raw = call_groq(_CONVERSATIONAL_WRITER_PROMPT, writer_input, temperature=0.7, stage_name="Stage 1 ConversationalWriter")
+        if not writer_raw:
+            raise RuntimeError("Stage 1 ConversationalWriter returned empty output from Groq API.")
+
+        writer_json_str = extract_json_clean(writer_raw, expect_array=False)
+        try:
+            writer_parsed = json.loads(writer_json_str)
+        except Exception as e:
+            self.log.warning("[Multi-Agent Conversational] Writer JSON parse warning (%s) — using raw fallback", e)
+            writer_parsed = writer_raw
+
+        writer_draft_formatted = json.dumps(writer_parsed, indent=2) if isinstance(writer_parsed, (list, dict)) else writer_raw
+
+        # STAGE 2: ConversationalCritic
+        if stage_delay > 0:
+            self.log.info("[Multi-Agent Conversational] Pausing %d seconds before Stage 2 Critic...", stage_delay)
+            time.sleep(stage_delay)
+
+        self.log.info("[Multi-Agent Conversational] Stage 2/3: Launching ConversationalCritic audit...")
+        critic_input = (
+            f"ORIGINAL REDDIT SOURCE:\n{raw}\n\n"
+            f"CONVERSATIONAL WRITER DRAFT (JSON):\n{writer_draft_formatted}"
+        )
+        critic_raw = call_groq(_CONVERSATIONAL_CRITIC_PROMPT, critic_input, temperature=0.3, stage_name="Stage 2 ConversationalCritic")
+        critic_json_str = extract_json_clean(critic_raw, expect_array=False) if critic_raw else ""
+
+        if critic_json_str:
+            try:
+                critic_parsed = json.loads(critic_json_str)
+                status = critic_parsed.get("overall_status", "UNKNOWN")
+                num_issues = len(critic_parsed.get("issues", []))
+                self.log.info("[Multi-Agent Conversational] Critic Audit Completed — Status: %s (%d issues flagged)", status, num_issues)
+            except Exception:
+                self.log.info("[Multi-Agent Conversational] Critic Audit Completed — Output received")
+
+        # STAGE 3: ConversationalPolisher
+        if stage_delay > 0:
+            self.log.info("[Multi-Agent Conversational] Pausing %d seconds before Stage 3 Polisher...", stage_delay)
+            time.sleep(stage_delay)
+
+        self.log.info("[Multi-Agent Conversational] Stage 3/3: Launching ConversationalPolisher...")
+        polisher_input = (
+            f"ORIGINAL REDDIT SOURCE:\n{raw}\n\n"
+            f"WRITER DRAFT:\n{writer_draft_formatted}\n\n"
+            f"CRITIC AUDIT (JSON):\n{critic_json_str if critic_json_str else critic_raw}"
+        )
+        polisher_raw = call_groq(_CONVERSATIONAL_POLISHER_PROMPT, polisher_input, temperature=0.7, stage_name="Stage 3 ConversationalPolisher")
+        if not polisher_raw:
+            self.log.warning("[Multi-Agent Conversational] Stage 3 Polisher returned empty — defaulting to Writer draft")
+            return json.dumps(writer_parsed) if isinstance(writer_parsed, dict) else writer_json_str
+
+        polisher_json_str = extract_json_clean(polisher_raw, expect_array=False)
+        try:
+            polisher_parsed = json.loads(polisher_json_str)
+            if isinstance(polisher_parsed, dict) and "script" in polisher_parsed:
+                turns_count = len(polisher_parsed.get("script", []))
+                self.log.info("[Multi-Agent Conversational] Stage 3 Polisher success! Outputted %d dialogue turns.", turns_count)
+                return json.dumps(polisher_parsed)
+            else:
+                self.log.warning("[Multi-Agent Conversational] Polisher output missing 'script' key — using writer draft")
+                return json.dumps(writer_parsed) if isinstance(writer_parsed, dict) else writer_json_str
+        except Exception as json_err:
+            self.log.warning("[Multi-Agent Conversational] Polisher JSON parse failed (%s) — using writer draft", json_err)
+            return json.dumps(writer_parsed) if isinstance(writer_parsed, dict) else writer_json_str
 
     def _rewrite_monologue_multi_agent(self, raw: str, feedback: Optional[str] = None) -> str:
         """Executes the 3-Stage Multi-Agent Monologue pipeline:
