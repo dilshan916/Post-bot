@@ -136,11 +136,11 @@ class GameplayDownloader:
             )
 
     def get_random_gameplay(self) -> Path:
-        """Return the next .mp4 file in sequential rotation from the gameplay directory.
+        """Return a randomly chosen .mp4 file from the gameplay directory.
 
         Maintains persistent state in data/gameplay_state.json so that runs
-        seamlessly rotate between all available gameplay backgrounds without
-        repeating the same background twice in a row.
+        randomly select gameplay backgrounds without repeating the exact same
+        background twice in a row.
 
         Returns:
             Path to the selected gameplay clip.
@@ -162,7 +162,7 @@ class GameplayDownloader:
                 "Download gameplay footage first or place .mp4 files there."
             )
 
-        # Stateful Round-Robin Rotation
+        # Stateful Randomized Selection
         state_file = resolve_path("data/gameplay_state.json")
         last_file = ""
         try:
@@ -174,10 +174,9 @@ class GameplayDownloader:
             pass
 
         file_names = [p.name for p in mp4_files]
-        if last_file in file_names:
-            last_idx = file_names.index(last_file)
-            next_idx = (last_idx + 1) % len(mp4_files)
-            chosen = mp4_files[next_idx]
+        if last_file in file_names and len(mp4_files) > 1:
+            candidates = [p for p in mp4_files if p.name != last_file]
+            chosen = random.choice(candidates)
         else:
             chosen = random.choice(mp4_files)
 
@@ -190,8 +189,8 @@ class GameplayDownloader:
             self.logger.warning(f"Could not persist gameplay state: {e}")
 
         self.logger.info(
-            f"Rotated background to: {chosen.name} "
-            f"(position {file_names.index(chosen.name) + 1}/{len(mp4_files)}: {', '.join(file_names)})"
+            f"Selected random gameplay background: {chosen.name} "
+            f"(out of {len(mp4_files)} available files)"
         )
         return chosen
 
@@ -221,7 +220,7 @@ class GameplayDownloader:
                 f"No gameplay videos found in {self.gameplay_dir}."
             )
 
-        # Load state to know where to start rotation
+        # Load state to know which clip was used last
         state_file = resolve_path("data/gameplay_state.json")
         last_file = ""
         try:
@@ -232,19 +231,33 @@ class GameplayDownloader:
         except Exception:
             pass
 
-        file_names = [p.name for p in mp4_files]
-        if last_file in file_names:
-            current_idx = (file_names.index(last_file) + 1) % len(mp4_files)
-        else:
-            current_idx = 0
+        # Create a randomized pool for clip selection
+        pool = list(mp4_files)
+        random.shuffle(pool)
 
-        # Build plan
+        # Avoid starting with the clip that ended the previous run if possible
+        if len(pool) > 1 and last_file and pool[0].name == last_file:
+            swap_idx = random.randint(1, len(pool) - 1)
+            pool[0], pool[swap_idx] = pool[swap_idx], pool[0]
+
         plan: List[Dict[str, Any]] = []
         remaining_duration = target_duration
+        pool_idx = 0
 
         while remaining_duration > 0.1:
-            chosen_video = mp4_files[current_idx]
-            current_idx = (current_idx + 1) % len(mp4_files)
+            if pool_idx >= len(pool):
+                # Re-shuffle pool if target duration requires more clips than available
+                last_chosen_name = plan[-1]["path"].name if plan else ""
+                new_pool = list(mp4_files)
+                random.shuffle(new_pool)
+                if len(new_pool) > 1 and last_chosen_name and new_pool[0].name == last_chosen_name:
+                    swap_idx = random.randint(1, len(new_pool) - 1)
+                    new_pool[0], new_pool[swap_idx] = new_pool[swap_idx], new_pool[0]
+                pool = new_pool
+                pool_idx = 0
+
+            chosen_video = pool[pool_idx]
+            pool_idx += 1
 
             # Determine segment length
             seg_len = min(remaining_duration, segment_duration)
