@@ -1,87 +1,145 @@
-# 🤖 Reddit Daily Bot (Post-bot) — Getting Started Guide & Documentation
+# 🤖 Post-bot — Autonomous Viral Video Generator & Social Media Scheduler
 
-An automated vertical video generator & Facebook Reel publisher that compiles Reddit stories, threads, and riddles into high-retention subtitled vertical Reels (9:16) overlayed on gameplay footage.
+<div align="center">
 
-Features a **Hybrid LLM Architecture** (Gemini 2.5 Flash for analytics & story ranking + Groq Llama 3.3 70B for script rewriting with key rotation), **Dual TTS Engines** (Local Kokoro-82M + Edge-TTS fallback), dynamic double-pass active word subtitling, and direct **Facebook Page Reel Scheduling** in Sri Lankan Time (SLT UTC+05:30).
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Local TTS Engine](https://img.shields.io/badge/TTS-Kokoro--82M%20ONNX-3b82f6?style=for-the-badge&logo=onnx&logoColor=white)](https://huggingface.co/hexgrad/Kokoro-82M)
+[![LLM Reasoning](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Fast LLM Rewriter](https://img.shields.io/badge/LLM-Groq%20Llama%203.3%2070B-f55036?style=for-the-badge&logo=fastapi&logoColor=white)](https://groq.com/)
+[![Video Pipeline](https://img.shields.io/badge/Video-FFmpeg%20%7C%20MoviePy-0078d4?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+
+### **End-to-End Vertical Video Generation, Neural Voice Narration & Facebook Reels Publishing Automation**
+*Scrapes trending Reddit stories, rewrites high-retention scripts with dual LLMs, synthesizes offline Kokoro-82M neural voices, renders dynamic word-by-word subtitles, and auto-schedules directly to Facebook Pages.*
+
+</div>
 
 ---
 
-## ✨ Key Features & Pipeline Modes
+## 🌟 Overview
 
-### 🎬 Pipeline Modes
-1. **Monologue Mode**: High-stakes narrative stories with a single narrator, screenshot hook title card, and active word subtitles.
-2. **Conversational Mode**: Multi-character text-message drama scripts with distinct Kokoro voice roles (`MALE`, `FEMALE`, `OLD_FEMALE`, `OLD_MALE`, `CHILD_MALE`, `CHILD_FEMALE`).
-3. **AskReddit Thread Mode**: Curated top comments compiled into thread-style video series with author headers and upvote counts.
-4. **Fun Riddle Mode**: Interactive riddles generated directly via Gemini Flash with suspense countdown timers.
-5. **Batch Hybrid Scheduler (Mode 5)**: End-to-end automation that generates and schedules up to **42 Reels over a 7-day period** (2 posts/day at **09:30 AM** and **07:30 PM SLT**) with upfront CLI script approval (`y`/`n`), zero comment clutter, and hardware cool-down protection.
+**Post-bot** is an enterprise-grade automated content generation engine built in Python. Designed for automated social media growth channels, it compiles Reddit stories, conversational text dramas, AskReddit threads, and viral riddles into broadcast-ready **9:16 vertical video Reels** complete with dynamic gameplay backgrounds and synchronized kinetic subtitles.
+
+The bot employs a **Hybrid LLM Architecture** (Google Gemini 2.5 Flash for deep viral story analysis & ranking + Groq Llama 3.3 70B for high-retention script rewriting with automated multi-key rotation), a **Dual TTS Engine** (offline local Kokoro-82M ONNX neural speech with cloud Edge-TTS fallback), and direct **Facebook Graph API** auto-scheduling in Sri Lankan Time (SLT UTC+05:30) with automated hardware cooldown protection.
+
+---
+
+## ✨ Key Features
+
+### 🎬 5 Production Pipeline Modes
+* **Mode 1 — Monologue Mode**: Single-narrator viral narrative with screenshot hook title cards, dynamic background music ducking, and word-by-word active subtitles.
+* **Mode 2 — Conversational Mode**: Multi-character text-message drama scripts with distinct neural character assignments (`MALE`, `FEMALE`, `OLD_FEMALE`, `OLD_MALE`, `CHILD_MALE`, `CHILD_FEMALE`).
+* **Mode 3 — AskReddit Thread Mode**: Curated high-upvote thread discussions compiled into visual commentary reels with author avatars and upvote badges.
+* **Mode 4 — Interactive Riddle Mode**: Brain-teaser riddles generated on the fly via Gemini Flash featuring animated suspense countdown timers.
+* **Mode 5 — Batch Hybrid Scheduler (Full Automation)**: End-to-end autopilot that generates and schedules up to **42 Reels across 7 days** (2 daily drops at **09:30 AM** and **07:30 PM SLT**) with CLI script approval (`y`/`n`), zero comment clutter, and GPU/CPU thermal cooldown protection.
 
 ### 🎙️ Dual TTS Engine Architecture
-- **Kokoro-82M (Local, High Quality)**: Ultra-realistic offline text-to-speech utilizing `CPUExecutionProvider` for 100% stability across all GPUs. Supports distinct voice assignments (`am_adam`, `af_bella`, `bm_george`, `af_nicole`, `am_puck`, `af_sky`).
-- **Edge-TTS (Cloud Fallback)**: Zero-setup cloud fallback engine that automatically engages if local Kokoro assets are absent.
+* **Kokoro-82M (Local Offline ONNX)**: Ultra-realistic offline text-to-speech utilizing `CPUExecutionProvider` for 100% stability across all systems. Supports distinct voice assignments (`am_adam`, `af_bella`, `bm_george`, `af_nicole`, `am_puck`, `af_sky`).
+* **Edge-TTS (Cloud Fallback)**: Zero-configuration cloud fallback engine that automatically engages if local Kokoro model assets are absent.
 
-### 🧠 Hybrid LLM Engine
-- **Gemini 2.5 Flash**: Batch analytics engine that evaluates candidate stories and ranks the top viral concepts based on emotional triggers, debatability, and retention potential.
-- **Groq (Llama 3.3 70B)**: Creative script rewriter enforcing strict retention constraints (high-stakes openers, curiosity-gap teasers, delayed escalation reveals) with automatic multi-key rotation on rate limits.
+### 🧠 Hybrid LLM Engine with Key Rotation
+* **Google Gemini 2.5 Flash**: Analytical engine that scans candidate Reddit submissions and scores them on emotional triggers, virality, relatability, and retention probability.
+* **Groq Llama 3.3 70B**: High-speed creative script rewriter enforcing strict retention formulas (high-stakes openers, curiosity-gap teasers, delayed escalation reveals) with automatic multi-key rotation upon rate limits.
+
+### 🎨 Visual Subtitle & Rendering Suite
+* **Active Word Kinetic Subtitles**: Double-pass subtitle generation with colored word highlighting, custom typography, and drop shadows for maximum watch time.
+* **Automated Background Randomizer**: Selects and trims high-bitrate vertical gameplay footage seamlessly.
+* **Playwright Screenshot Engine**: Renders crisp browser-based Reddit UI title cards and comment headers with authentic fonts and dark mode themes.
 
 ---
 
-## 🛠️ Step-by-Step Getting Started Guide
+## 🏗️ Technical Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   Reddit Submission Scraper                 │
+│         (r/relationship_advice, r/AmItheAsshole, etc.)      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Raw Submission Text
+┌──────────────────────────────▼──────────────────────────────┐
+│                    Hybrid LLM Pipeline                      │
+├──────────────────────────────┬──────────────────────────────┤
+│     Gemini 2.5 Flash         │      Groq Llama 3.3 70B      │
+│  (Story Scoring & Virality)  │ (Retention Script Rewriter)  │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Approved Production Script
+┌──────────────────────────────▼──────────────────────────────┐
+│                  Audio & Speech Synthesis                   │
+├──────────────────────────────┬──────────────────────────────┤
+│      Kokoro-82M ONNX         │      Edge-TTS (Fallback)     │
+│   (Local CPU Multi-Voice)    │     (Cloud Neural Audio)     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Master Audio + Word Timings
+┌──────────────────────────────▼──────────────────────────────┐
+│               Video Compositor & Rendering Engine           │
+│   (MoviePy • FFmpeg • Kinetic Subtitles • Gameplay Cuts)    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Final 1080x1920 MP4 Video
+┌──────────────────────────────▼──────────────────────────────┐
+│               Facebook Graph API Auto-Scheduler             │
+│   (Daily Batches • Sri Lanka Time SLT • Cooldown Checks)    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Getting Started
 
 ### 1. Prerequisites
-- **Python**: Version `3.10` or higher installed.
-- **FFmpeg**: Installed and added to your system's PATH.
+* **Python**: `3.10` or higher installed.
+* **FFmpeg**: Installed and configured in system `PATH`.
+* **Git**: Installed.
 
-### 2. Environment & Dependency Setup
+### 2. Installation
 
 ```powershell
-# 1. Clone the repository
+# Clone the repository
 git clone https://github.com/dilshan916/Post-bot.git
 cd Post-bot
 
-# 2. Create and activate a virtual environment
+# Create and activate virtual environment
 python -m venv .venv
 .venv\Scripts\activate
 
-# 3. Install required Python packages
+# Install dependencies
 pip install -r requirements.txt
 
-# 4. Install Playwright browser binaries (required for title card screenshot rendering)
+# Install Playwright browser dependencies (for UI screenshots)
 playwright install chromium
 ```
 
 ---
 
-### 3. Kokoro-82M Local TTS Setup (Recommended)
+### 3. Local Kokoro-82M Model Setup (Optional, Recommended)
 
-To use high-quality local offline TTS narration, download the two model assets into `assets/kokoro/`:
+To enable 100% offline, studio-grade speech synthesis, download the Kokoro model files into `assets/kokoro/`:
 
-1. **`kokoro-v0_19.onnx`** (~310 MB): [Download Link](https://huggingface.co/thewh1teagle/Kokoro/resolve/main/kokoro-v0_19.onnx)
-2. **`voices.bin`** (~5.5 MB): [Download Link](https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin)
-
-*Or automatically download both files via Python:*
 ```powershell
 .venv\Scripts\python -c "
 import requests, pathlib
 d = pathlib.Path('assets/kokoro'); d.mkdir(parents=True, exist_ok=True)
-for url, name in [('https://huggingface.co/thewh1teagle/Kokoro/resolve/main/kokoro-v0_19.onnx', 'kokoro-v0_19.onnx'), ('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin', 'voices.bin')]:
+for url, name in [
+    ('https://huggingface.co/thewh1teagle/Kokoro/resolve/main/kokoro-v0_19.onnx', 'kokoro-v0_19.onnx'),
+    ('https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files/voices.bin', 'voices.bin')
+]:
     print('Downloading', name)
     resp = requests.get(url, stream=True)
     with open(d / name, 'wb') as f: f.write(resp.content)
 print('Kokoro setup complete!')
 "
 ```
-*(If model files are omitted, `Post-bot` automatically logs a warning and uses Edge-TTS smoothly).*
+*(If model files are omitted, `Post-bot` automatically logs a warning and falls back to Edge-TTS).*
 
 ---
 
-### 4. Configuration Setup (`config.yaml`)
+## ⚙️ Configuration (`config.yaml`)
 
 Copy `config.example.yaml` to `config.yaml`:
 ```powershell
 cp config.example.yaml config.yaml
 ```
 
-Open `config.yaml` and configure your API keys and target pages:
+Configure your API keys, voices, and Facebook Page credentials:
 
 ```yaml
 # Gemini API Key(s) for analytics & story selection
@@ -114,41 +172,39 @@ facebook:
     - page_name: "Reddit Stories"
       page_id: "YOUR_PAGE_ID_2"
       access_token: "YOUR_PAGE_ACCESS_TOKEN_2"
-    - page_name: "Pick your poison"
-      page_id: "YOUR_PAGE_ID_3"
-      access_token: "YOUR_PAGE_ACCESS_TOKEN_3"
 ```
 
 ---
 
-### 5. Running the Bot
+## 🎮 Running the Application
 
 Launch the interactive console application:
 ```powershell
 python main.py
 ```
 
-#### Menu Options:
-- **`1` — Monologue Mode**: Renders a single narration video from Reddit stories.
-- **`2` — Conversational Mode**: Renders a multi-speaker text drama video.
-- **`3` — AskReddit Thread Mode**: Renders a top-comments thread video.
-- **`4` — Fun Riddle Mode**: Renders a riddle video with countdown timer.
-- **`5` — Batch Hybrid Scheduler (Recommended for Full Automation)**:
-  1. Select target page: `1. Daily Stories`, `2. Reddit Stories`, `3. Pick your poison`, or `4. All Pages`.
-  2. The bot scrapes top posts and uses Gemini to rank up to 14 viral concepts.
-  3. **Interactive Script Approval**: Review each rewritten Groq script in the CLI and enter `y` to approve or `n` to reject.
-  4. **Automated Rendering & Scheduling**: Once approved, videos are rendered one by one and scheduled to your Facebook page at **09:30 AM** and **07:30 PM SLT**, with a 30-second hardware cooldown between videos.
+### Interactive Menu:
+* **`1` — Monologue Mode**: Renders a single-narrator video from top Reddit stories.
+* **`2` — Conversational Mode**: Generates a multi-speaker text drama video.
+* **`3` — AskReddit Thread Mode**: Compiles a curated multi-comment thread video.
+* **`4` — Fun Riddle Mode**: Generates interactive riddles with animated countdown timers.
+* **`5` — Batch Hybrid Scheduler (Recommended)**: Scrapes, rewrites, requests CLI verification (`y`/`n`), renders videos in sequence, and schedules them directly to Facebook Pages at **09:30 AM** and **07:30 PM SLT**.
 
 ---
 
 ## 🧪 Testing
 
-Run the full automated unit test suite (54 unit tests covering TTS engines, scrapers, splitters, speaker resolution, and Facebook publisher):
+Execute the comprehensive unit and integration test suite:
 ```powershell
 python -m pytest
 ```
+*Includes 54 unit tests covering TTS engines, scrapers, script splitters, speaker resolution, and Facebook publishers.*
 
 ---
 
-## 📄 License
-This project is licensed under the MIT License.
+## 📄 License & Credits
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+### Developed & Maintained by
+* **Dilshan Chandrarathne** ([@dilshan916](https://github.com/dilshan916))
